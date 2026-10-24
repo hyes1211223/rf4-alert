@@ -1,560 +1,120 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RF4 釣魚畫面偵測提醒工具</title>
-    <!-- 引入 Tailwind CSS 以便快速設計出現代化的暗黑風格 UI -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #111827; /* Tailwind gray-900 */
-            color: #f3f4f6; /* Tailwind gray-100 */
-        }
-        /* 讓 Canvas 在畫面上能自適應縮放，並保持正確比例 */
-        #display-container {
-            position: relative;
-            width: 100%;
-            max-width: 1280px;
-            margin: 0 auto;
-            border: 2px dashed #374151;
-            border-radius: 0.5rem;
-            overflow: hidden;
-            background-color: #000;
-        }
-        #main-canvas {
-            width: 100%;
-            height: auto;
-            display: block;
-            cursor: crosshair;
-        }
-        /* 隱藏實際的 video 元素，全部透過 canvas 繪製以避免座標偏移問題 */
-        #hidden-video {
-            display: none;
-        }
-        .btn {
-            transition: all 0.2s;
-        }
-        .btn:active {
-            transform: scale(0.95);
-        }
-        /* 自訂捲軸樣式 */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RF4 提醒工具 - 第一階段測試</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; }
+  </style>
 </head>
-<body class="min-h-screen p-4 md:p-8 flex flex-col">
-
-    <!-- 頂部標題區 -->
-    <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center">
-        <div>
-            <h1 class="text-3xl font-bold text-green-400 flex items-center gap-2">
-                🎣 RF4 網頁版上魚提醒工具
-            </h1>
-            <p class="text-gray-400 mt-1 text-sm">純前端運行，不讀記憶體、完全安全。請選擇遊戲畫面，並框選「上魚圖示」區域。</p>
-        </div>
-        <div class="mt-4 md:mt-0 flex gap-2">
-            <button id="test-alert-btn" class="btn px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-semibold shadow">
-                🔔 測試音效與通知
-            </button>
-        </div>
+<body class="p-6">
+  <div class="max-w-5xl mx-auto space-y-6">
+    
+    <!-- 標題與操作列 -->
+    <header class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+      <div>
+        <h1 class="text-lg font-bold text-emerald-400">第一階段：畫面擷取排錯測試</h1>
+        <p class="text-xs text-slate-400">測試 Video 與 Canvas 能否正常顯示畫面</p>
+      </div>
+      <button id="startBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg font-medium text-sm transition">
+        開始擷取畫面
+      </button>
     </header>
 
-    <!-- 控制面板 -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-        
-        <!-- 操作按鈕區 -->
-        <div class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <button id="start-capture-btn" class="btn px-4 py-3 bg-blue-600 hover:bg-blue-500 rounded font-bold shadow-lg text-white">
-                1. 擷取遊戲畫面
-            </button>
-            <button id="capture-target-btn" class="btn px-4 py-3 bg-yellow-600 hover:bg-yellow-500 rounded font-bold shadow-lg text-white disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                2. 設定目標特徵 (截圖)
-            </button>
-            <button id="start-detection-btn" class="btn px-4 py-3 bg-green-600 hover:bg-green-500 rounded font-bold shadow-lg text-white disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                3. 開始偵測上魚
-            </button>
-            <button id="stop-detection-btn" class="btn px-4 py-3 bg-red-600 hover:bg-red-500 rounded font-bold shadow-lg text-white hidden">
-                ⏹️ 停止偵測
-            </button>
-        </div>
-
-        <!-- 狀態與設定區 -->
-        <div class="bg-gray-800 p-4 rounded-lg shadow border border-gray-700">
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-300 mb-1">
-                    偵測靈敏度 (相似度門檻): <span id="threshold-value" class="text-green-400 font-bold">85%</span>
-                </label>
-                <input type="range" id="threshold-slider" min="1" max="100" value="85" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
-                <p class="text-xs text-gray-500 mt-1">調高以避免誤判，調低則更容易觸發。</p>
-            </div>
-            
-            <div class="flex justify-between items-center border-t border-gray-700 pt-3">
-                <span class="text-sm text-gray-400">目前相似度:</span>
-                <span id="current-similarity" class="text-xl font-mono text-white">0.00%</span>
-            </div>
-        </div>
+    <!-- 狀態與除錯資訊 -->
+    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 text-xs font-mono space-y-1 text-slate-300">
+      <div>系統狀態：<span id="logStatus" class="text-amber-400">等待使用者開啟分享...</span></div>
+      <div>畫面解析度：<span id="logResolution" class="text-sky-400">0 x 0</span></div>
     </div>
 
-    <!-- 畫面顯示與框選區 -->
-    <div class="flex flex-col xl:flex-row gap-6">
-        
-        <!-- 主要影像區 -->
-        <div class="flex-grow">
-            <div id="display-container" class="aspect-video relative">
-                <!-- 提示文字，影片加載後會隱藏 -->
-                <div id="overlay-text" class="absolute inset-0 flex items-center justify-center text-gray-500 z-10 pointer-events-none">
-                    請先點擊「擷取遊戲畫面」
-                </div>
-                <!-- 實際處理影像的 Canvas -->
-                <canvas id="main-canvas"></canvas>
-                <!-- 隱藏的 video 用來接收 MediaStream -->
-                <video id="hidden-video" autoplay playsinline muted></video>
-            </div>
-            <p class="text-sm text-gray-400 mt-2">💡 提示：在畫面上按住滑鼠左鍵拖曳，畫出你想偵測的區域（例如右下角的小魚圖示）。</p>
+    <!-- 畫面比對區 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- 原生 Video 預覽 -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-2">
+        <span class="text-xs font-semibold text-slate-300">1. 原生 Video 標籤（直接串流）</span>
+        <div class="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center border border-slate-700">
+          <video id="testVideo" class="w-full h-full object-contain" autoplay playsinline muted></video>
         </div>
+      </div>
 
-        <!-- 目標特徵預覽區 -->
-        <div class="w-full xl:w-64 flex-shrink-0 flex flex-col gap-4">
-            <div class="bg-gray-800 p-4 rounded-lg shadow border border-gray-700 h-full">
-                <h3 class="font-bold text-gray-200 mb-2 border-b border-gray-700 pb-2">目標特徵 (Baseline)</h3>
-                <div class="w-full aspect-square bg-gray-900 rounded border border-gray-700 flex items-center justify-center overflow-hidden mb-2 relative">
-                    <canvas id="target-preview-canvas" class="max-w-full max-h-full"></canvas>
-                    <span id="no-target-text" class="text-sm text-gray-500 absolute">尚未擷取</span>
-                </div>
-                <div id="log-box" class="h-32 bg-black rounded p-2 overflow-y-auto text-xs font-mono text-gray-300">
-                    <div>> 系統初始化完成。</div>
-                </div>
-            </div>
+      <!-- Canvas 繪製預覽 -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-2">
+        <span class="text-xs font-semibold text-slate-300">2. Canvas 繪製畫面（後續分析用）</span>
+        <div class="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center border border-slate-700">
+          <canvas id="testCanvas" class="w-full h-full object-contain"></canvas>
         </div>
+      </div>
+
     </div>
 
-    <script>
-        /**
-         * 系統狀態與變數
-         */
-        const state = {
-            stream: null,
-            videoWidth: 0,
-            videoHeight: 0,
-            roi: null,            // 框選區域 {x, y, w, h}
-            isDrawing: false,     // 是否正在畫框
-            startX: 0,
-            startY: 0,
-            baselineImageData: null, // 基準特徵影像資料
-            isDetecting: false,      // 是否正在偵測中
-            renderLoopId: null,
-            detectLoopId: null,
-            threshold: 85,           // 相似度門檻
-            cooldown: false          // 提示冷卻中
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const video = document.getElementById('testVideo');
+    const canvas = document.getElementById('testCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const logStatus = document.getElementById('logStatus');
+    const logResolution = document.getElementById('logResolution');
+
+    let isRunning = false;
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        logStatus.textContent = '請求畫面授權中...';
+        
+        // 喚起瀏覽器畫面分享
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 30 } },
+          audio: false
+        });
+
+        video.srcObject = stream;
+
+        // 當影片數據真正準備就緒時才開跑
+        video.onloadeddata = () => {
+          video.play();
+          isRunning = true;
+
+          // 設定 Canvas 正確解析度
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          logStatus.textContent = '畫面成功擷取並傳輸中！';
+          logStatus.className = 'text-emerald-400';
+          logResolution.textContent = `${video.videoWidth} x ${video.videoHeight}`;
+
+          // 開啟 Canvas 渲染迴圈
+          renderLoop();
         };
 
-        // DOM 元素綁定
-        const els = {
-            video: document.getElementById('hidden-video'),
-            canvas: document.getElementById('main-canvas'),
-            ctx: document.getElementById('main-canvas').getContext('2d', { willReadFrequently: true }),
-            targetCanvas: document.getElementById('target-preview-canvas'),
-            targetCtx: document.getElementById('target-preview-canvas').getContext('2d'),
-            
-            btnCapture: document.getElementById('start-capture-btn'),
-            btnTarget: document.getElementById('capture-target-btn'),
-            btnStartDetect: document.getElementById('start-detection-btn'),
-            btnStopDetect: document.getElementById('stop-detection-btn'),
-            btnTestAlert: document.getElementById('test-alert-btn'),
-            
-            sliderThreshold: document.getElementById('threshold-slider'),
-            txtThreshold: document.getElementById('threshold-value'),
-            txtSimilarity: document.getElementById('current-similarity'),
-            overlayText: document.getElementById('overlay-text'),
-            noTargetText: document.getElementById('no-target-text'),
-            logBox: document.getElementById('log-box')
+        // 監聽使用者停止分享
+        stream.getVideoTracks()[0].onended = () => {
+          isRunning = false;
+          logStatus.textContent = '使用者已停止畫面分享';
+          logStatus.className = 'text-amber-400';
         };
 
-        // Web Audio API Context (需使用者互動後才能啟動)
-        let audioCtx;
+      } catch (err) {
+        logStatus.textContent = '擷取失敗：' + err.message;
+        logStatus.className = 'text-rose-400';
+      }
+    });
 
-        /**
-         * 輔助功能：日誌輸出
-         */
-        function log(msg, type="info") {
-            const div = document.createElement('div');
-            const time = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-            div.textContent = `[${time}] ${msg}`;
-            if(type === 'error') div.classList.add('text-red-400');
-            if(type === 'success') div.classList.add('text-green-400');
-            if(type === 'alert') div.classList.add('text-yellow-400', 'font-bold');
-            
-            els.logBox.appendChild(div);
-            els.logBox.scrollTop = els.logBox.scrollHeight;
-        }
+    // 持續將 Video 繪製到 Canvas
+    function renderLoop() {
+      if (!isRunning) return;
 
-        /**
-         * 功能 1: 畫面擷取 (getDisplayMedia)
-         */
-        els.btnCapture.addEventListener('click', async () => {
-            try {
-                // 請求分享畫面
-                state.stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: "never" },
-                    audio: false
-                });
+      if (video.readyState >= 2) { // 確保有畫面影格
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
 
-                els.video.srcObject = state.stream;
-                
-                // 當影片載入屬性時，設定 Canvas 大小
-                els.video.onloadedmetadata = () => {
-                    state.videoWidth = els.video.videoWidth;
-                    state.videoHeight = els.video.videoHeight;
-                    
-                    els.canvas.width = state.videoWidth;
-                    els.canvas.height = state.videoHeight;
-                    
-                    els.overlayText.style.display = 'none';
-                    
-                    // 開始渲染循環 (將影片畫到 canvas 上)
-                    startRenderLoop();
-                    
-                    log("畫面擷取成功", "success");
-                    // 啟用後續按鈕
-                    els.btnTarget.disabled = false;
-                    
-                    // 預設一個中央小框作為 ROI，以免使用者忘記畫
-                    state.roi = {
-                        x: state.videoWidth / 2 - 50,
-                        y: state.videoHeight / 2 - 50,
-                        w: 100,
-                        h: 100
-                    };
-                };
-
-                // 若使用者從瀏覽器介面停止分享
-                state.stream.getVideoTracks()[0].onended = () => {
-                    stopSystem();
-                    log("畫面分享已中斷", "error");
-                };
-
-            } catch (err) {
-                console.error(err);
-                log("無法擷取畫面: " + err.message, "error");
-            }
-        });
-
-        /**
-         * 渲染影片到 Canvas (使用 requestAnimationFrame 以達 60fps)
-         */
-        function startRenderLoop() {
-            if (state.renderLoopId) cancelAnimationFrame(state.renderLoopId);
-            
-            function render() {
-                if (!state.stream || els.video.paused || els.video.ended) return;
-                
-                // 清空並畫上最新的一幀影片
-                els.ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
-                els.ctx.drawImage(els.video, 0, 0, els.canvas.width, els.canvas.height);
-                
-                // 如果有畫框 (ROI)，把它標示出來
-                if (state.roi) {
-                    els.ctx.strokeStyle = state.isDetecting ? '#10B981' : '#EF4444'; // 偵測中綠色，否則紅色
-                    els.ctx.lineWidth = 3;
-                    els.ctx.setLineDash(state.isDetecting ? [] : [5, 5]); // 偵測中實線，否則虛線
-                    els.ctx.strokeRect(state.roi.x, state.roi.y, state.roi.w, state.roi.h);
-                    
-                    // 加上半透明紅色遮罩，讓使用者清楚知道辨識範圍
-                    els.ctx.fillStyle = state.isDetecting ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
-                    els.ctx.fillRect(state.roi.x, state.roi.y, state.roi.w, state.roi.h);
-                    els.ctx.setLineDash([]);
-                }
-                
-                state.renderLoopId = requestAnimationFrame(render);
-            }
-            render();
-        }
-
-        /**
-         * 功能 2: 滑鼠框選 Region of Interest (ROI)
-         */
-        // 將滑鼠的 Client 座標，轉換為 Canvas 實際的像素座標 (解決解析度問題)
-        function getCanvasPos(e) {
-            const rect = els.canvas.getBoundingClientRect();
-            // X 比例 = (滑鼠X - 元素左邊界) / 元素顯示寬度 * Canvas實際寬度
-            const scaleX = els.canvas.width / rect.width;
-            const scaleY = els.canvas.height / rect.height;
-            return {
-                x: (e.clientX - rect.left) * scaleX,
-                y: (e.clientY - rect.top) * scaleY
-            };
-        }
-
-        els.canvas.addEventListener('mousedown', (e) => {
-            if (!state.stream) return; // 還沒抓畫面就不能畫
-            state.isDrawing = true;
-            const pos = getCanvasPos(e);
-            state.startX = pos.x;
-            state.startY = pos.y;
-            state.roi = { x: pos.x, y: pos.y, w: 0, h: 0 };
-        });
-
-        els.canvas.addEventListener('mousemove', (e) => {
-            if (!state.isDrawing) return;
-            const pos = getCanvasPos(e);
-            state.roi.w = pos.x - state.startX;
-            state.roi.h = pos.y - state.startY;
-        });
-
-        els.canvas.addEventListener('mouseup', (e) => {
-            if (!state.isDrawing) return;
-            state.isDrawing = false;
-            
-            // 修正寬高為負數的情況 (往左上角拖曳)
-            if (state.roi.w < 0) {
-                state.roi.x += state.roi.w;
-                state.roi.w = Math.abs(state.roi.w);
-            }
-            if (state.roi.h < 0) {
-                state.roi.y += state.roi.h;
-                state.roi.h = Math.abs(state.roi.h);
-            }
-            
-            // 防止框選太小
-            if (state.roi.w < 10 || state.roi.h < 10) {
-                log("框選區域過小，請重新框選", "error");
-                state.roi = null;
-                els.btnStartDetect.disabled = true;
-            } else {
-                log(`已設定偵測區域 (${Math.floor(state.roi.w)}x${Math.floor(state.roi.h)})`);
-            }
-        });
-
-        /**
-         * 功能 3: 擷取目標特徵 (Baseline Image)
-         */
-        els.btnTarget.addEventListener('click', () => {
-            if (!state.roi) return;
-            
-            // 為了不捕捉到我們自己畫的紅色框框線，我們直接從 hidden video 重新拿一幀來裁切
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = els.canvas.width;
-            tempCanvas.height = els.canvas.height;
-            const tCtx = tempCanvas.getContext('2d');
-            tCtx.drawImage(els.video, 0, 0, tempCanvas.width, tempCanvas.height);
-            
-            // 取出 ROI 範圍的像素資料 (ImageData)
-            state.baselineImageData = tCtx.getImageData(state.roi.x, state.roi.y, state.roi.w, state.roi.h);
-            
-            // 顯示在預覽區
-            els.targetCanvas.width = state.roi.w;
-            els.targetCanvas.height = state.roi.h;
-            els.targetCtx.putImageData(state.baselineImageData, 0, 0);
-            
-            els.noTargetText.style.display = 'none';
-            els.btnStartDetect.disabled = false;
-            log("已儲存目標特徵", "success");
-        });
-
-        /**
-         * 功能 4: 像素相似度計算 (Image Comparison)
-         */
-        function calculateSimilarity(baseline, current) {
-            const data1 = baseline.data;
-            const data2 = current.data;
-            const len = data1.length;
-            let totalDiff = 0;
-            
-            // 每 4 個值為一個像素 (R, G, B, A)
-            // 跳步長度可視效能需求調整，這裡是全像素比對
-            for (let i = 0; i < len; i += 4) {
-                // 取絕對差值
-                const rDiff = Math.abs(data1[i] - data2[i]);
-                const gDiff = Math.abs(data1[i+1] - data2[i+1]);
-                const bDiff = Math.abs(data1[i+2] - data2[i+2]);
-                
-                totalDiff += (rDiff + gDiff + bDiff);
-            }
-            
-            // 最大可能差異 = 像素數量 * 3個顏色通道 * 255
-            const maxDiff = (len / 4) * 3 * 255;
-            const similarity = 100 - ((totalDiff / maxDiff) * 100);
-            
-            return similarity;
-        }
-
-        /**
-         * 功能 5: 啟動 / 停止 偵測迴圈
-         */
-        els.btnStartDetect.addEventListener('click', () => {
-            if (!state.baselineImageData) return;
-            
-            // 請求通知權限
-            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-                Notification.requestPermission();
-            }
-
-            state.isDetecting = true;
-            els.btnStartDetect.classList.add('hidden');
-            els.btnStopDetect.classList.remove('hidden');
-            els.btnCapture.disabled = true;
-            els.btnTarget.disabled = true;
-            
-            log("開始持續偵測...", "success");
-            
-            // 使用 setInterval 進行定期檢查 (每秒 10 次，即 100ms 一次，減低 CPU 消耗)
-            state.detectLoopId = setInterval(runDetection, 100);
-        });
-
-        els.btnStopDetect.addEventListener('click', () => {
-            state.isDetecting = false;
-            clearInterval(state.detectLoopId);
-            
-            els.btnStopDetect.classList.add('hidden');
-            els.btnStartDetect.classList.remove('hidden');
-            els.btnCapture.disabled = false;
-            els.btnTarget.disabled = false;
-            els.txtSimilarity.textContent = "0.00%";
-            els.txtSimilarity.className = "text-xl font-mono text-white";
-            
-            log("偵測已停止");
-        });
-
-        function runDetection() {
-            if (!state.isDetecting || !state.roi) return;
-            
-            try {
-                // 從正在繪製的 main-canvas 中抓取當前 ROI 的像素資料
-                // 因為我們在 startRenderLoop 中是先清除 -> 畫影片 -> 再畫框
-                // 為了避免把框的顏色算進去，必須在畫框之前抓取，或者用隱藏的 tempCanvas 抓。
-                // 這裡最安全的方式是從隱藏的 video 再畫一次小範圍來抓：
-                
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = state.roi.w;
-                tempCanvas.height = state.roi.h;
-                const tCtx = tempCanvas.getContext('2d');
-                // 利用 drawImage 裁切功能：drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
-                tCtx.drawImage(
-                    els.video, 
-                    state.roi.x, state.roi.y, state.roi.w, state.roi.h, // Source
-                    0, 0, state.roi.w, state.roi.h // Destination
-                );
-                
-                const currentImageData = tCtx.getImageData(0, 0, state.roi.w, state.roi.h);
-                
-                // 計算相似度
-                const sim = calculateSimilarity(state.baselineImageData, currentImageData);
-                
-                // 更新 UI
-                els.txtSimilarity.textContent = sim.toFixed(2) + "%";
-                if (sim >= state.threshold) {
-                    els.txtSimilarity.className = "text-xl font-mono text-red-500 font-bold animate-pulse";
-                    triggerAlert();
-                } else {
-                    els.txtSimilarity.className = "text-xl font-mono text-white";
-                }
-            } catch (err) {
-                console.error("偵測錯誤", err);
-            }
-        }
-
-        /**
-         * 功能 6: 觸發提醒 (音效與通知)
-         */
-        function triggerAlert() {
-            if (state.cooldown) return; // 如果在冷卻中則略過
-            
-            log("偵測到特徵！觸發提醒！", "alert");
-            
-            // 播放音效
-            playBeep();
-            
-            // 發送瀏覽器通知
-            if (Notification.permission === "granted") {
-                new Notification("🎣 釣魚提醒", {
-                    body: "偵測到上魚訊號！快拉竿！",
-                    icon: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>"
-                });
-            }
-
-            // 設定 5 秒冷卻時間 (避免連續狂響)
-            state.cooldown = true;
-            setTimeout(() => {
-                state.cooldown = false;
-            }, 5000);
-        }
-
-        /**
-         * Web Audio API 生成 Beep 聲
-         */
-        function playBeep() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // 880Hz (A5) 音調較高具提醒作用
-            oscillator.frequency.exponentialRampToValueAtTime(1760, audioCtx.currentTime + 0.1);
-            
-            // 音量控制 (0.1 避免太大聲嚇到)
-            gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.5);
-        }
-
-        /**
-         * 滑桿數值綁定
-         */
-        els.sliderThreshold.addEventListener('input', (e) => {
-            state.threshold = parseInt(e.target.value);
-            els.txtThreshold.textContent = state.threshold + "%";
-        });
-
-        /**
-         * 測試按鈕功能
-         */
-        els.btnTestAlert.addEventListener('click', () => {
-            // 請求權限 (有些瀏覽器必須在 user gesture 內)
-            if (Notification.permission !== "granted") {
-                Notification.requestPermission();
-            }
-            playBeep();
-            log("測試音效已播放");
-        });
-
-        /**
-         * 系統重置
-         */
-        function stopSystem() {
-            if (state.renderLoopId) cancelAnimationFrame(state.renderLoopId);
-            if (state.detectLoopId) clearInterval(state.detectLoopId);
-            
-            if (state.stream) {
-                state.stream.getTracks().forEach(track => track.stop());
-            }
-            state.stream = null;
-            state.isDetecting = false;
-            
-            els.ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
-            els.overlayText.style.display = 'flex';
-            els.overlayText.textContent = "畫面分享已結束";
-            
-            els.btnStartDetect.classList.remove('hidden');
-            els.btnStopDetect.classList.add('hidden');
-            els.btnStartDetect.disabled = true;
-            els.btnTarget.disabled = true;
-            els.btnCapture.disabled = false;
-        }
-
-    </script>
+      requestAnimationFrame(renderLoop);
+    }
+  </script>
 </body>
 </html>
