@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RF4 上魚提醒工具 - 多條件自訂版</title>
+  <title>RF4 上魚提醒工具 (多條件晝夜防誤判版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; }
     canvas { touch-action: none; cursor: crosshair; }
-    /* 隱藏原生滾動條 */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
@@ -20,22 +19,23 @@
     <header class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
       <div>
         <h1 class="text-lg font-bold text-emerald-400">🎣 RF4 多條件上魚警報系統</h1>
-        <p class="text-xs text-slate-400">可新增多組監控區域，並可自訂各區域的觸發音效</p>
+        <p class="text-xs text-slate-400">已啟用高對比黑白輪廓比對，自動無視晝夜天空與水面顏色干擾</p>
       </div>
       <button id="startBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg font-medium text-sm transition">
         開啟畫面分享
       </button>
     </header>
 
+    <!-- 隱藏串流 Video -->
     <video id="bgVideo" class="hidden" autoplay playsinline muted></video>
 
     <!-- 主工作區 -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- 左側：畫面擷取與畫框區 (占 7 欄) -->
+      <!-- 左側：遊戲主畫面 (占 7 欄) -->
       <div class="lg:col-span-7 bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
         <div class="flex justify-between items-center text-xs text-slate-300">
-          <span class="font-semibold">遊戲主畫面（點擊右側選單來拖曳調整相對框選位置）</span>
+          <span class="font-semibold">遊戲主畫面（用滑鼠左鍵拖曳拉框）</span>
           <span id="currentEditingText" class="text-amber-400 font-medium">當前編輯：規則 1</span>
         </div>
 
@@ -43,22 +43,24 @@
           <canvas id="mainCanvas" class="w-full h-full object-contain"></canvas>
         </div>
         
-        <p class="text-xs text-slate-400">
-          💡 <b>操作說明：</b>在畫面上按住滑鼠左鍵拖曳拉出紅框，點擊規則卡片的「截取當前框選」即可鎖定特徵。
-        </p>
+        <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-700 text-xs text-slate-300 space-y-1">
+          <p class="text-amber-400 font-semibold">💡 精準辨識小技巧：</p>
+          <p>1. 框選範圍<b>越小越精準</b>！請只框住「小魚圖示」或文字本身，不要把大片天空或海面框進去。</p>
+          <p>2. 劃好框後，點擊右側卡片的 <b>📸 擷取當前框選為基準</b> 即可鎖定。</p>
+        </div>
       </div>
 
-      <!-- 右側：規則與音效管理面板 (占 5 欄) -->
+      <!-- 右側：規則管理面板 (占 5 欄) -->
       <div class="lg:col-span-5 space-y-4">
         
         <div class="flex justify-between items-center">
           <h2 class="text-sm font-bold text-slate-200">監控規則清單</h2>
           <button id="addRuleBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">
-            ➕ 新增一條規則
+            ➕ 新增規則
           </button>
         </div>
 
-        <!-- 規則卡片列表容器 -->
+        <!-- 卡片列表容器 -->
         <div id="rulesContainer" class="space-y-4 max-h-[600px] overflow-y-auto no-scrollbar pr-1">
           <!-- 動態生成規則卡片 -->
         </div>
@@ -69,7 +71,6 @@
   </div>
 
   <script>
-    // DOM 元素
     const startBtn = document.getElementById('startBtn');
     const video = document.getElementById('bgVideo');
     const mainCanvas = document.getElementById('mainCanvas');
@@ -82,15 +83,15 @@
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     
-    // 全域規則資料結構
+    // 規則資料結構
     let rules = [
       {
         id: 1,
-        name: "規則 1 (例如：上魚小圖示)",
+        name: "規則 1 (上魚小圖示)",
         roi: { x: 0.25, y: 0.8, w: 0.12, h: 0.1 },
         targetImageData: null,
-        threshold: 80,
-        soundType: 'beep1', // 'beep1', 'beep2', 'siren', 'custom'
+        threshold: 85,
+        soundType: 'beep2',
         customAudioUrl: null,
         enabled: true,
         lastTrigger: 0,
@@ -99,12 +100,11 @@
     ];
     let activeRuleId = 1;
 
-    // 1. 初始化與事件宣佈
     function init() {
       renderRulesUI();
     }
 
-    // 2. 渲染規則卡片介面
+    // 渲染 UI 卡片
     function renderRulesUI() {
       rulesContainer.innerHTML = '';
 
@@ -116,7 +116,6 @@
         }`;
 
         card.innerHTML = `
-          <!-- 卡片頂部：標題與切換 -->
           <div class="flex items-center justify-between">
             <input type="text" value="${rule.name}" data-id="${rule.id}" class="rule-name-input bg-slate-900 text-xs text-slate-200 border border-slate-700 px-2 py-1 rounded focus:outline-none focus:border-amber-500 w-2/3">
             <div class="flex items-center space-x-2">
@@ -128,14 +127,13 @@
             </div>
           </div>
 
-          <!-- 編輯此區域按鈕與對應特徵預覽 -->
           <div class="flex items-center space-x-3 bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/80">
             <canvas id="targetCanvas_${rule.id}" class="w-14 h-12 bg-black rounded border border-slate-700 object-contain shrink-0"></canvas>
             <div class="flex-1 space-y-1">
               <button data-id="${rule.id}" class="select-rule-btn text-xs w-full py-1 rounded font-medium transition ${
                 isActive ? 'bg-amber-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
               }">
-                ${isActive ? '🎯 正在調整此紅框' : '點擊選取此框'}
+                ${isActive ? '🎯 正在拖曳調整此框' : '點擊切換此框'}
               </button>
               <button data-id="${rule.id}" class="capture-btn text-xs w-full bg-blue-600 hover:bg-blue-500 text-white py-1 rounded transition">
                 📸 擷取當前框選為基準
@@ -143,28 +141,25 @@
             </div>
           </div>
 
-          <!-- 門檻滑桿與目前相似度 -->
           <div class="space-y-1">
             <div class="flex justify-between text-xs">
               <span class="text-slate-400">相似度門檻：<b>${rule.threshold}%</b></span>
-              <span class="text-slate-300">目前：<b class="sim-display" id="sim_${rule.id}">--%</b></span>
+              <span class="text-slate-300">目前相似度：<b class="sim-display" id="sim_${rule.id}">--%</b></span>
             </div>
             <input type="range" min="50" max="98" value="${rule.threshold}" data-id="${rule.id}" class="threshold-slider w-full h-1.5 bg-slate-700 rounded appearance-none cursor-pointer accent-emerald-500">
           </div>
 
-          <!-- 音效選擇與上傳 -->
           <div class="pt-2 border-t border-slate-700/60 flex flex-col space-y-2 text-xs">
             <div class="flex items-center justify-between">
               <span class="text-slate-400">觸發音效：</span>
               <select data-id="${rule.id}" class="sound-select bg-slate-900 text-slate-200 border border-slate-700 rounded px-2 py-1">
-                <option value="beep1" ${rule.soundType==='beep1'?'selected':''}>預設嗶嗶聲 (低)</option>
+                <option value="beep1" ${rule.soundType==='beep1'?'selected':''}>低音嗶嗶聲</option>
                 <option value="beep2" ${rule.soundType==='beep2'?'selected':''}>高音提醒聲</option>
                 <option value="siren" ${rule.soundType==='siren'?'selected':''}>警報急促音</option>
-                <option value="custom" ${rule.soundType==='custom'?'selected':''}>📁 自訂 MP3/WAV 音效</option>
+                <option value="custom" ${rule.soundType==='custom'?'selected':''}>📁 自訂 MP3/WAV 檔</option>
               </select>
             </div>
 
-            <!-- 當選擇自訂音效時顯示上傳按鈕 -->
             <div id="customSoundArea_${rule.id}" class="${rule.soundType==='custom'?'':'hidden'} flex items-center space-x-2">
               <input type="file" accept="audio/*" data-id="${rule.id}" class="custom-audio-input text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600">
             </div>
@@ -177,7 +172,6 @@
 
         rulesContainer.appendChild(card);
 
-        // 如果該規則已經有鎖定特徵，繪製回小圖示 Canvas
         if (rule.targetImageData) {
           setTimeout(() => {
             const tCanvas = document.getElementById(`targetCanvas_${rule.id}`);
@@ -194,9 +188,7 @@
       bindUIEvents();
     }
 
-    // 3. 綁定卡片內動態事件
     function bindUIEvents() {
-      // 規則名稱修改
       document.querySelectorAll('.rule-name-input').forEach(input => {
         input.addEventListener('input', (e) => {
           const id = parseInt(e.target.dataset.id);
@@ -205,7 +197,6 @@
         });
       });
 
-      // 選取要調整的規則框
       document.querySelectorAll('.select-rule-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           activeRuleId = parseInt(e.target.dataset.id);
@@ -215,7 +206,6 @@
         });
       });
 
-      // 截取當前紅框圖像為特徵基準
       document.querySelectorAll('.capture-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const id = parseInt(e.target.dataset.id);
@@ -234,7 +224,6 @@
         });
       });
 
-      // 滑桿調整
       document.querySelectorAll('.threshold-slider').forEach(slider => {
         slider.addEventListener('input', (e) => {
           const id = parseInt(e.target.dataset.id);
@@ -244,7 +233,6 @@
         });
       });
 
-      // 開關切換
       document.querySelectorAll('.rule-enable-toggle').forEach(toggle => {
         toggle.addEventListener('change', (e) => {
           const id = parseInt(e.target.dataset.id);
@@ -253,7 +241,6 @@
         });
       });
 
-      // 刪除規則
       document.querySelectorAll('.delete-rule-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const id = parseInt(e.target.dataset.id);
@@ -263,230 +250,9 @@
         });
       });
 
-      // 音效選單選取
       document.querySelectorAll('.sound-select').forEach(select => {
         select.addEventListener('change', (e) => {
           const id = parseInt(e.target.dataset.id);
           const r = rules.find(x => x.id === id);
           if (r) {
-            r.soundType = e.target.value;
-            renderRulesUI();
-          }
-        });
-      });
-
-      // 自訂音效檔案上傳
-      document.querySelectorAll('.custom-audio-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          const file = e.target.files[0];
-          if (r && file) {
-            r.customAudioUrl = URL.createObjectURL(file);
-          }
-        });
-      });
-
-      // 測試音效按鈕
-      document.querySelectorAll('.test-sound-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          if (r) playSound(r);
-        });
-      });
-    }
-
-    // 4. 新增規則邏輯
-    addRuleBtn.addEventListener('click', () => {
-      const newId = rules.length ? Math.max(...rules.map(x => x.id)) + 1 : 1;
-      rules.push({
-        id: newId,
-        name: `規則 ${newId}`,
-        roi: { x: 0.3, y: 0.8, w: 0.12, h: 0.1 },
-        targetImageData: null,
-        threshold: 80,
-        soundType: 'beep1',
-        customAudioUrl: null,
-        enabled: true,
-        lastTrigger: 0,
-        currentSim: 0
-      });
-      activeRuleId = newId;
-      renderRulesUI();
-    });
-
-    // 5. 畫面擷取啟動
-    startBtn.addEventListener('click', async () => {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: { ideal: 30 } }
-        });
-        video.srcObject = stream;
-
-        video.onloadeddata = () => {
-          video.play();
-          isCapturing = true;
-          mainCanvas.width = video.videoWidth;
-          mainCanvas.height = video.videoHeight;
-          renderLoop();
-        };
-      } catch (err) {
-        alert('無法擷取畫面：' + err.message);
-      }
-    });
-
-    // 6. 主渲染與比對迴圈
-    function renderLoop() {
-      if (!isCapturing) return;
-
-      if (video.readyState >= 2) {
-        ctx.drawImage(video, 0, 0, mainCanvas.width, mainCanvas.height);
-
-        // 逐一檢查並繪製每條規則
-        rules.forEach(rule => {
-          const rx = rule.roi.x * mainCanvas.width;
-          const ry = rule.roi.y * mainCanvas.height;
-          const rw = rule.roi.w * mainCanvas.width;
-          const rh = rule.roi.h * mainCanvas.height;
-
-          const isActive = rule.id === activeRuleId;
-
-          // 比對相似度
-          if (rule.enabled && rule.targetImageData && rw > 0 && rh > 0) {
-            const currentImgData = ctx.getImageData(rx, ry, rw, rh);
-            const sim = calcSimilarity(currentImgData, rule.targetImageData);
-            rule.currentSim = sim;
-
-            // 更新 UI 上的數字
-            const simEl = document.getElementById(`sim_${rule.id}`);
-            if (simEl) simEl.textContent = `${sim.toFixed(1)}%`;
-
-            // 觸發音效警報
-            if (sim >= rule.threshold) {
-              const now = Date.now();
-              if (now - rule.lastTrigger > 3500) { // 3.5秒冷卻
-                rule.lastTrigger = now;
-                playSound(rule);
-              }
-            }
-          }
-
-          // 繪製框線：當前選取的用亮橘色，其它用淡灰色
-          ctx.strokeStyle = isActive ? '#f59e0b' : rule.enabled ? '#38bdf8' : '#64748b';
-          ctx.lineWidth = isActive ? 3 : 1.5;
-          ctx.strokeRect(rx, ry, rw, rh);
-
-          // 當前編輯規則加半透明填滿
-          if (isActive) {
-            ctx.fillStyle = 'rgba(245, 158, 11, 0.15)';
-            ctx.fillRect(rx, ry, rw, rh);
-          }
-        });
-      }
-
-      requestAnimationFrame(renderLoop);
-    }
-
-    // 7. 滑鼠拉框互動
-    function getCanvasCoords(e) {
-      const rect = mainCanvas.getBoundingClientRect();
-      const scaleX = mainCanvas.width / rect.width;
-      const scaleY = mainCanvas.height / rect.height;
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
-      };
-    }
-
-    mainCanvas.addEventListener('mousedown', (e) => {
-      if (!isCapturing) return;
-      const activeRule = rules.find(x => x.id === activeRuleId);
-      if (!activeRule) return;
-
-      isDragging = true;
-      const pos = getCanvasCoords(e);
-      dragStart = pos;
-
-      activeRule.roi.x = pos.x / mainCanvas.width;
-      activeRule.roi.y = pos.y / mainCanvas.height;
-      activeRule.roi.w = 0.001;
-      activeRule.roi.h = 0.001;
-    });
-
-    mainCanvas.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const activeRule = rules.find(x => x.id === activeRuleId);
-      if (!activeRule) return;
-
-      const pos = getCanvasCoords(e);
-      const x = Math.min(pos.x, dragStart.x);
-      const y = Math.min(pos.y, dragStart.y);
-      const w = Math.abs(pos.x - dragStart.x);
-      const h = Math.abs(pos.y - dragStart.y);
-
-      activeRule.roi.x = x / mainCanvas.width;
-      activeRule.roi.y = y / mainCanvas.height;
-      activeRule.roi.w = Math.max(0.01, w / mainCanvas.width);
-      activeRule.roi.h = Math.max(0.01, h / mainCanvas.height);
-    });
-
-    window.addEventListener('mouseup', () => { isDragging = false; });
-
-    // 8. 像素相似度算法
-    function calcSimilarity(img1, img2) {
-      if (!img1 || !img2 || img1.data.length !== img2.data.length) return 0;
-      const d1 = img1.data;
-      const d2 = img2.data;
-      let diff = 0;
-      const total = d1.length / 4;
-
-      for (let i = 0; i < d1.length; i += 4) {
-        diff += (Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2])) / 3;
-      }
-      return Math.max(0, 100 - ((diff / total) / 255 * 100));
-    }
-
-    // 9. 多樣化音效系統
-    function playSound(rule) {
-      if (rule.soundType === 'custom' && rule.customAudioUrl) {
-        const audio = new Audio(rule.customAudioUrl);
-        audio.play().catch(()=>{});
-        return;
-      }
-
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        if (rule.soundType === 'beep1') {
-          osc.frequency.setValueAtTime(600, ctx.currentTime);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.3);
-        } else if (rule.soundType === 'beep2') {
-          osc.frequency.setValueAtTime(1000, ctx.currentTime);
-          osc.frequency.setValueAtTime(1500, ctx.currentTime + 0.1);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.3);
-        } else if (rule.soundType === 'siren') {
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(800, ctx.currentTime);
-          osc.frequency.linearRampToValueAtTime(1600, ctx.currentTime + 0.2);
-          gain.gain.setValueAtTime(0.2, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.25);
-        }
-      } catch (e) {}
-    }
-
-    // 開機初始化
-    init();
-  </script>
-</body>
-</html>
+            r.soundType = e
