@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RF4 上魚提醒工具 (多條件晝夜防誤判版)</title>
+  <title>RF4 上魚提醒工具 - 門檻精準輸入版</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; }
     canvas { touch-action: none; cursor: crosshair; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 6px; }
+    /* 隱藏數字輸入框預設的上下小箭頭，讓介面更簡潔（方向鍵依然有效） */
+    input[type="number"]::-webkit-inner-spin-button, 
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
   </style>
 </head>
 <body class="p-4 md:p-6">
@@ -19,24 +25,30 @@
     <header class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
       <div>
         <h1 class="text-lg font-bold text-emerald-400">🎣 RF4 多條件上魚警報系統</h1>
-        <p class="text-xs text-slate-400">已啟用高對比黑白輪廓比對，自動無視晝夜天空與水面顏色干擾</p>
+        <p class="text-xs text-slate-400">未框選前隱藏選框 + 大圖凍結框選 + 色彩確認彈窗 + 門檻精準輸入</p>
       </div>
-      <button id="startBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg font-medium text-sm transition">
+      <button id="startBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg font-medium text-sm transition cursor-pointer">
         開啟畫面分享
       </button>
     </header>
 
-    <!-- 隱藏串流 Video -->
     <video id="bgVideo" class="hidden" autoplay playsinline muted></video>
 
     <!-- 主工作區 -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- 左側：遊戲主畫面 (占 7 欄) -->
+      <!-- 左側：遊戲動態監控畫面 (占 7 欄) -->
       <div class="lg:col-span-7 bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
         <div class="flex justify-between items-center text-xs text-slate-300">
-          <span class="font-semibold">遊戲主畫面（用滑鼠左鍵拖曳拉框）</span>
-          <span id="currentEditingText" class="text-amber-400 font-medium">當前編輯：規則 1</span>
+          <span class="font-semibold">遊戲動態監控畫面</span>
+          <div class="flex items-center space-x-3">
+            <span id="currentEditingText" class="text-amber-400 font-medium">當前編輯：規則 1</span>
+            <label class="inline-flex items-center cursor-pointer text-slate-300 hover:text-white">
+              <input type="checkbox" id="showOverlayToggle" checked class="sr-only peer">
+              <div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500 relative"></div>
+              <span class="ml-1.5 text-[11px] font-medium">👁️ 顯示監控框</span>
+            </label>
+          </div>
         </div>
 
         <div class="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center border border-slate-700 relative">
@@ -44,215 +56,698 @@
         </div>
         
         <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-700 text-xs text-slate-300 space-y-1">
-          <p class="text-amber-400 font-semibold">💡 精準辨識小技巧：</p>
-          <p>1. 框選範圍<b>越小越精準</b>！請只框住「小魚圖示」或文字本身，不要把大片天空或海面框進去。</p>
-          <p>2. 劃好框後，點擊右側卡片的 <b>📸 擷取當前框選為基準</b> 即可鎖定。</p>
+          <p class="text-amber-400 font-semibold">💡 操作說明：</p>
+          <p>剛分享畫面時不會有任何選框。請點擊右側 <b>🔍 凍結畫面並開啟大圖框選</b>，在彈出視窗選好並按下儲存後，主畫面才會顯示對應的監控框！</p>
         </div>
       </div>
 
       <!-- 右側：規則管理面板 (占 5 欄) -->
       <div class="lg:col-span-5 space-y-4">
-        
         <div class="flex justify-between items-center">
           <h2 class="text-sm font-bold text-slate-200">監控規則清單</h2>
-          <button id="addRuleBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">
+          <button id="addRuleBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium cursor-pointer">
             ➕ 新增規則
           </button>
         </div>
 
-        <!-- 卡片列表容器 -->
         <div id="rulesContainer" class="space-y-4 max-h-[600px] overflow-y-auto no-scrollbar pr-1">
-          <!-- 動態生成規則卡片 -->
+          <!-- 規則卡片區域 -->
         </div>
-
       </div>
 
     </div>
   </div>
 
+  <!-- 🎨 自訂顏色選擇獨立視窗 (Color Modal) -->
+  <div id="colorModal" class="hidden fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-xs w-full space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="text-sm font-bold text-amber-400">🎨 選擇監控框顏色</h3>
+        <button id="closeColorModalX" class="text-slate-400 hover:text-white text-xs">✕</button>
+      </div>
+      
+      <div class="flex items-center space-x-3">
+        <input type="color" id="modalColorPicker" class="w-14 h-14 bg-transparent cursor-pointer rounded border border-slate-700 shrink-0">
+        <div class="flex-1 space-y-1">
+          <span class="text-[11px] text-slate-400">當前選擇預覽：</span>
+          <div id="modalColorPreview" class="h-8 rounded-lg border border-slate-600 flex items-center justify-center text-xs font-mono font-bold text-white shadow-inner">
+            #f59e0b
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-1.5">
+        <span class="text-[11px] text-slate-400">快速熱門配色：</span>
+        <div class="grid grid-cols-7 gap-1.5" id="colorPresetsContainer"></div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+        <button id="cancelColorBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs cursor-pointer">取消</button>
+        <button id="confirmColorBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer">確定套用顏色</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全螢幕大圖精準框選 Modal -->
+  <div id="cropModal" class="hidden fixed inset-0 bg-slate-950/90 z-50 flex flex-col p-4 md:p-6 backdrop-blur-sm">
+    <div class="flex justify-between items-center pb-3 border-b border-slate-800 mb-3">
+      <div>
+        <h2 class="text-base font-bold text-amber-400">🖼️ 靜態大圖精準框選模式</h2>
+        <p class="text-xs text-slate-400">畫面已凍結。請用滑鼠在下方大圖拖曳拉出紅框，或搭配右側按鈕微調。</p>
+      </div>
+      <div class="flex space-x-3">
+        <button id="cancelCropBtn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-lg text-xs font-medium cursor-pointer">
+          取消
+        </button>
+        <button id="saveCropBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg text-xs font-bold transition cursor-pointer">
+          📸 鎖定特徵並儲存
+        </button>
+      </div>
+    </div>
+
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
+      <div class="lg:col-span-9 bg-black rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden relative">
+        <canvas id="modalCanvas" class="max-w-full max-h-full object-contain"></canvas>
+      </div>
+
+      <div class="lg:col-span-3 bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-4">
+        <div class="space-y-4">
+          <h3 class="text-xs font-bold text-slate-300 pb-2 border-b border-slate-800">截取區域預覽</h3>
+          <div class="flex justify-center bg-black p-2 rounded-lg border border-slate-700 min-h-[100px] items-center">
+            <canvas id="modalPreviewCanvas" class="max-w-full max-h-[120px] object-contain border border-emerald-500 rounded"></canvas>
+          </div>
+
+          <div class="space-y-2 pt-2 border-t border-slate-800">
+            <span class="text-xs font-semibold text-amber-400">方向與大小微調：</span>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button data-dir="up" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">⬆️ 上移</button>
+              <button data-dir="down" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">⬇️ 下移</button>
+              <button data-dir="left" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">⬅️ 左移</button>
+              <button data-dir="right" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">➡️ 右移</button>
+              <button data-dir="w_plus" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">↔️ 寬度+</button>
+              <button data-dir="w_minus" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">↔️ 寬度-</button>
+              <button data-dir="h_plus" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">↕️ 高度+</button>
+              <button data-dir="h_minus" class="modal-nudge-btn bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700">↕️ 高度-</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-slate-400">💡 微調提示：盡量讓紅框緊緊貼合文字或小圖示外圍。</p>
+      </div>
+    </div>
+  </div>
+
   <script>
-    const startBtn = document.getElementById('startBtn');
-    const video = document.getElementById('bgVideo');
-    const mainCanvas = document.getElementById('mainCanvas');
-    const ctx = mainCanvas.getContext('2d');
-    const rulesContainer = document.getElementById('rulesContainer');
-    const addRuleBtn = document.getElementById('addRuleBtn');
-    const currentEditingText = document.getElementById('currentEditingText');
+    document.addEventListener('DOMContentLoaded', () => {
+      const startBtn = document.getElementById('startBtn');
+      const video = document.getElementById('bgVideo');
+      const mainCanvas = document.getElementById('mainCanvas');
+      const ctx = mainCanvas.getContext('2d');
+      const rulesContainer = document.getElementById('rulesContainer');
+      const addRuleBtn = document.getElementById('addRuleBtn');
+      const currentEditingText = document.getElementById('currentEditingText');
+      const showOverlayToggle = document.getElementById('showOverlayToggle');
 
-    let isCapturing = false;
-    let isDragging = false;
-    let dragStart = { x: 0, y: 0 };
-    
-    // 規則資料結構
-    let rules = [
-      {
-        id: 1,
-        name: "規則 1 (上魚小圖示)",
-        roi: { x: 0.25, y: 0.8, w: 0.12, h: 0.1 },
-        targetImageData: null,
-        threshold: 85,
-        soundType: 'beep2',
-        customAudioUrl: null,
-        enabled: true,
-        lastTrigger: 0,
-        currentSim: 0
+      const cropModal = document.getElementById('cropModal');
+      const modalCanvas = document.getElementById('modalCanvas');
+      const modalCtx = modalCanvas.getContext('2d');
+      const modalPreviewCanvas = document.getElementById('modalPreviewCanvas');
+      const modalPreviewCtx = modalPreviewCanvas.getContext('2d');
+      const cancelCropBtn = document.getElementById('cancelCropBtn');
+      const saveCropBtn = document.getElementById('saveCropBtn');
+
+      const colorModal = document.getElementById('colorModal');
+      const modalColorPicker = document.getElementById('modalColorPicker');
+      const modalColorPreview = document.getElementById('modalColorPreview');
+      const colorPresetsContainer = document.getElementById('colorPresetsContainer');
+      const cancelColorBtn = document.getElementById('cancelColorBtn');
+      const confirmColorBtn = document.getElementById('confirmColorBtn');
+      const closeColorModalX = document.getElementById('closeColorModalX');
+
+      let isCapturing = false;
+      let isDragging = false;
+      let dragStart = { x: 0, y: 0 };
+      
+      let tempRoi = { x: 0.25, y: 0.8, w: 0.12, h: 0.1 };
+      let snapshotImgData = null;
+
+      const defaultColors = ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
+      let colorSelectingRuleId = null;
+      let pendingColor = '#f59e0b';
+
+      let rules = [
+        {
+          id: 1,
+          name: "規則 1 (未拋竿 / 提示)",
+          roi: { x: 0.25, y: 0.8, w: 0.12, h: 0.1 },
+          targetImageData: null,
+          threshold: 75,
+          soundType: 'beep2',
+          customAudioUrl: null,
+          color: '#f59e0b',
+          enabled: true,
+          lastTrigger: 0,
+          currentSim: 0
+        }
+      ];
+      let activeRuleId = 1;
+
+      function initColorPresets() {
+        colorPresetsContainer.innerHTML = '';
+        defaultColors.forEach(c => {
+          const btn = document.createElement('button');
+          btn.className = 'w-6 h-6 rounded-md border border-slate-600 hover:scale-110 transition cursor-pointer';
+          btn.style.backgroundColor = c;
+          btn.addEventListener('click', () => updateModalColorUI(c));
+          colorPresetsContainer.appendChild(btn);
+        });
       }
-    ];
-    let activeRuleId = 1;
 
-    function init() {
-      renderRulesUI();
-    }
+      function updateModalColorUI(color) {
+        pendingColor = color;
+        modalColorPicker.value = color;
+        modalColorPreview.style.backgroundColor = color;
+        modalColorPreview.textContent = color.toUpperCase();
+      }
 
-    // 渲染 UI 卡片
-    function renderRulesUI() {
-      rulesContainer.innerHTML = '';
+      function renderRulesUI() {
+        rulesContainer.innerHTML = '';
 
-      rules.forEach(rule => {
-        const isActive = rule.id === activeRuleId;
-        const card = document.createElement('div');
-        card.className = `p-4 rounded-xl border transition space-y-3 ${
-          isActive ? 'bg-slate-800 border-amber-500/80 shadow-lg' : 'bg-slate-800/60 border-slate-700'
-        }`;
+        rules.forEach(rule => {
+          const isActive = rule.id === activeRuleId;
+          const card = document.createElement('div');
+          card.className = `p-4 rounded-xl border transition space-y-3 ${
+            isActive ? 'bg-slate-800 border-amber-500/80 shadow-lg' : 'bg-slate-800/60 border-slate-700'
+          }`;
 
-        card.innerHTML = `
-          <div class="flex items-center justify-between">
-            <input type="text" value="${rule.name}" data-id="${rule.id}" class="rule-name-input bg-slate-900 text-xs text-slate-200 border border-slate-700 px-2 py-1 rounded focus:outline-none focus:border-amber-500 w-2/3">
-            <div class="flex items-center space-x-2">
-              <label class="inline-flex items-center cursor-pointer">
-                <input type="checkbox" ${rule.enabled ? 'checked' : ''} data-id="${rule.id}" class="rule-enable-toggle sr-only peer">
-                <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500 relative"></div>
-              </label>
-              ${rules.length > 1 ? `<button data-id="${rule.id}" class="delete-rule-btn text-rose-400 hover:text-rose-300 text-xs px-1">✕</button>` : ''}
-            </div>
-          </div>
-
-          <div class="flex items-center space-x-3 bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/80">
-            <canvas id="targetCanvas_${rule.id}" class="w-14 h-12 bg-black rounded border border-slate-700 object-contain shrink-0"></canvas>
-            <div class="flex-1 space-y-1">
-              <button data-id="${rule.id}" class="select-rule-btn text-xs w-full py-1 rounded font-medium transition ${
-                isActive ? 'bg-amber-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-              }">
-                ${isActive ? '🎯 正在拖曳調整此框' : '點擊切換此框'}
-              </button>
-              <button data-id="${rule.id}" class="capture-btn text-xs w-full bg-blue-600 hover:bg-blue-500 text-white py-1 rounded transition">
-                📸 擷取當前框選為基準
-              </button>
-            </div>
-          </div>
-
-          <div class="space-y-1">
-            <div class="flex justify-between text-xs">
-              <span class="text-slate-400">相似度門檻：<b>${rule.threshold}%</b></span>
-              <span class="text-slate-300">目前相似度：<b class="sim-display" id="sim_${rule.id}">--%</b></span>
-            </div>
-            <input type="range" min="50" max="98" value="${rule.threshold}" data-id="${rule.id}" class="threshold-slider w-full h-1.5 bg-slate-700 rounded appearance-none cursor-pointer accent-emerald-500">
-          </div>
-
-          <div class="pt-2 border-t border-slate-700/60 flex flex-col space-y-2 text-xs">
+          card.innerHTML = `
             <div class="flex items-center justify-between">
-              <span class="text-slate-400">觸發音效：</span>
-              <select data-id="${rule.id}" class="sound-select bg-slate-900 text-slate-200 border border-slate-700 rounded px-2 py-1">
-                <option value="beep1" ${rule.soundType==='beep1'?'selected':''}>低音嗶嗶聲</option>
-                <option value="beep2" ${rule.soundType==='beep2'?'selected':''}>高音提醒聲</option>
-                <option value="siren" ${rule.soundType==='siren'?'selected':''}>警報急促音</option>
-                <option value="custom" ${rule.soundType==='custom'?'selected':''}>📁 自訂 MP3/WAV 檔</option>
-              </select>
+              <div class="flex items-center space-x-2 w-2/3">
+                <button data-id="${rule.id}" class="open-color-modal-btn w-6 h-6 rounded-lg border border-slate-600 hover:scale-105 transition shrink-0 shadow cursor-pointer" style="background-color: ${rule.color || '#f59e0b'};" title="點擊自訂框線顏色"></button>
+                <input type="text" value="${rule.name}" data-id="${rule.id}" class="rule-name-input bg-slate-900 text-xs text-slate-200 border border-slate-700 px-2 py-1 rounded focus:outline-none focus:border-amber-500 w-full">
+              </div>
+              <div class="flex items-center space-x-2">
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" ${rule.enabled ? 'checked' : ''} data-id="${rule.id}" class="rule-enable-toggle sr-only peer">
+                  <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500 relative"></div>
+                </label>
+                ${rules.length > 1 ? `<button data-id="${rule.id}" class="delete-rule-btn text-rose-400 hover:text-rose-300 text-xs px-1 cursor-pointer">✕</button>` : ''}
+              </div>
             </div>
 
-            <div id="customSoundArea_${rule.id}" class="${rule.soundType==='custom'?'':'hidden'} flex items-center space-x-2">
-              <input type="file" accept="audio/*" data-id="${rule.id}" class="custom-audio-input text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600">
+            <div class="flex items-center space-x-3 bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/80">
+              <canvas id="targetCanvas_${rule.id}" class="w-16 h-14 bg-black rounded border border-slate-700 object-contain shrink-0"></canvas>
+              <div class="flex-1 space-y-1">
+                <button data-id="${rule.id}" class="open-crop-modal-btn text-xs w-full py-2 text-white font-bold rounded transition cursor-pointer" style="background-color: ${rule.color || '#f59e0b'};">
+                  🔍 凍結畫面並開啟大圖框選
+                </button>
+              </div>
             </div>
 
-            <button data-id="${rule.id}" class="test-sound-btn self-end text-[11px] text-amber-400 hover:underline">
-              🔊 試聽此音效
-            </button>
-          </div>
-        `;
+            <!-- 🌟 全新升級：雙重同步門檻輸入區 -->
+            <div class="space-y-2 pt-1">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">觸發門檻設定：</span>
+                <span class="text-slate-300">目前相似度：<b class="sim-display text-emerald-400 font-mono" id="sim_${rule.id}">--%</b></span>
+              </div>
+              <div class="flex items-center space-x-3">
+                <input type="range" min="1" max="100" value="${rule.threshold}" data-id="${rule.id}" class="threshold-slider flex-1 h-1.5 bg-slate-700 rounded appearance-none cursor-pointer accent-emerald-500">
+                
+                <!-- 手動數值輸入框 -->
+                <div class="flex items-center bg-slate-900 border border-slate-700 rounded px-2 py-1 focus-within:border-amber-500 transition">
+                  <input type="number" min="1" max="100" value="${rule.threshold}" data-id="${rule.id}" class="threshold-number-input bg-transparent text-amber-400 font-bold text-center w-8 text-xs focus:outline-none" title="點擊並使用 ↑ ↓ 鍵微調，或直接輸入數字">
+                  <span class="text-slate-500 text-xs ml-0.5">%</span>
+                </div>
+              </div>
+            </div>
 
-        rulesContainer.appendChild(card);
+            <div class="pt-3 border-t border-slate-700/60 flex flex-col space-y-2 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">觸發音效：</span>
+                <select data-id="${rule.id}" class="sound-select bg-slate-900 text-slate-200 border border-slate-700 rounded px-2 py-1">
+                  <option value="beep1" ${rule.soundType==='beep1'?'selected':''}>低音嗶嗶聲</option>
+                  <option value="beep2" ${rule.soundType==='beep2'?'selected':''}>高音提醒聲</option>
+                  <option value="siren" ${rule.soundType==='siren'?'selected':''}>警報急促音</option>
+                  <option value="custom" ${rule.soundType==='custom'?'selected':''}>📁 自訂 MP3/WAV 檔</option>
+                </select>
+              </div>
 
-        if (rule.targetImageData) {
-          setTimeout(() => {
-            const tCanvas = document.getElementById(`targetCanvas_${rule.id}`);
-            if (tCanvas) {
-              tCanvas.width = rule.targetImageData.width;
-              tCanvas.height = rule.targetImageData.height;
-              const tCtx = tCanvas.getContext('2d');
-              tCtx.putImageData(rule.targetImageData, 0, 0);
+              <div id="customSoundArea_${rule.id}" class="${rule.soundType==='custom'?'':'hidden'} flex items-center space-x-2">
+                <input type="file" accept="audio/*" data-id="${rule.id}" class="custom-audio-input text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600">
+              </div>
+
+              <button data-id="${rule.id}" class="test-sound-btn self-end text-[11px] text-amber-400 hover:underline cursor-pointer">
+                🔊 試聽此音效
+              </button>
+            </div>
+          `;
+
+          rulesContainer.appendChild(card);
+
+          if (rule.targetImageData) {
+            setTimeout(() => {
+              const tCanvas = document.getElementById(`targetCanvas_${rule.id}`);
+              if (tCanvas) {
+                tCanvas.width = rule.targetImageData.width;
+                tCanvas.height = rule.targetImageData.height;
+                const tCtx = tCanvas.getContext('2d');
+                tCtx.putImageData(rule.targetImageData, 0, 0);
+              }
+            }, 0);
+          }
+        });
+
+        bindUIEvents();
+      }
+
+      function bindUIEvents() {
+        document.querySelectorAll('.open-color-modal-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            colorSelectingRuleId = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === colorSelectingRuleId);
+            if (r) {
+              updateModalColorUI(r.color || '#f59e0b');
+              colorModal.classList.remove('hidden');
             }
-          }, 0);
+          });
+        });
+
+        document.querySelectorAll('.rule-name-input').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) r.name = e.target.value;
+          });
+        });
+
+        document.querySelectorAll('.open-crop-modal-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            if (!isCapturing) {
+              alert('請先點擊頂部的「開啟畫面分享」並選擇遊戲視窗！');
+              return;
+            }
+
+            activeRuleId = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === activeRuleId);
+            currentEditingText.textContent = `當前編輯：${r.name}`;
+
+            tempRoi = { ...r.roi };
+
+            modalCanvas.width = mainCanvas.width;
+            modalCanvas.height = mainCanvas.height;
+            snapshotImgData = ctx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
+
+            cropModal.classList.remove('hidden');
+            renderModalCanvas();
+          });
+        });
+
+        // 🌟 滑桿拖動同步邏輯 (不重新渲染全畫面，只更新數值)
+        document.querySelectorAll('.threshold-slider').forEach(slider => {
+          slider.addEventListener('input', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) {
+              r.threshold = parseInt(e.target.value);
+              // 同步更新旁邊的數字框
+              const numInput = document.querySelector(`.threshold-number-input[data-id="${id}"]`);
+              if (numInput) numInput.value = r.threshold;
+            }
+          });
+        });
+
+        // 🌟 數字框手動輸入 & 方向鍵同步邏輯
+        document.querySelectorAll('.threshold-number-input').forEach(numInput => {
+          numInput.addEventListener('input', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) {
+              let val = parseInt(e.target.value);
+              // 容許暫時的空值以便刪除輸入，但不更新給系統
+              if (isNaN(val)) return; 
+              
+              r.threshold = Math.max(1, Math.min(100, val));
+              
+              // 同步更新旁邊的滑桿
+              const slider = document.querySelector(`.threshold-slider[data-id="${id}"]`);
+              if (slider) slider.value = r.threshold;
+            }
+          });
+
+          // 當離開焦點時，若為空值則自動補回原本的安全數字
+          numInput.addEventListener('blur', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) {
+              e.target.value = r.threshold;
+            }
+          });
+        });
+
+        document.querySelectorAll('.rule-enable-toggle').forEach(toggle => {
+          toggle.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) r.enabled = e.target.checked;
+          });
+        });
+
+        document.querySelectorAll('.delete-rule-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            rules = rules.filter(x => x.id !== id);
+            if (activeRuleId === id && rules.length > 0) activeRuleId = rules[0].id;
+            renderRulesUI();
+          });
+        });
+
+        document.querySelectorAll('.sound-select').forEach(select => {
+          select.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) {
+              r.soundType = e.target.value;
+              renderRulesUI();
+            }
+          });
+        });
+
+        document.querySelectorAll('.custom-audio-input').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            const file = e.target.files[0];
+            if (r && file) {
+              r.customAudioUrl = URL.createObjectURL(file);
+            }
+          });
+        });
+
+        document.querySelectorAll('.test-sound-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            const r = rules.find(x => x.id === id);
+            if (r) playSound(r);
+          });
+        });
+      }
+
+      modalColorPicker.addEventListener('input', (e) => {
+        updateModalColorUI(e.target.value);
+      });
+
+      function hideColorModal() {
+        colorModal.classList.add('hidden');
+        colorSelectingRuleId = null;
+      }
+
+      cancelColorBtn.addEventListener('click', hideColorModal);
+      closeColorModalX.addEventListener('click', hideColorModal);
+
+      confirmColorBtn.addEventListener('click', () => {
+        if (colorSelectingRuleId) {
+          const r = rules.find(x => x.id === colorSelectingRuleId);
+          if (r) {
+            r.color = pendingColor;
+            renderRulesUI();
+          }
+        }
+        hideColorModal();
+      });
+
+      function hexToRgba(hex, alpha = 0.2) {
+        if (!hex) return `rgba(245, 158, 11, ${alpha})`;
+        let c = hex.replace('#', '');
+        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+        const num = parseInt(c, 16);
+        return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+      }
+
+      function renderModalCanvas() {
+        if (!snapshotImgData) return;
+
+        modalCtx.putImageData(snapshotImgData, 0, 0);
+
+        const rx = tempRoi.x * modalCanvas.width;
+        const ry = tempRoi.y * modalCanvas.height;
+        const rw = tempRoi.w * modalCanvas.width;
+        const rh = tempRoi.h * modalCanvas.height;
+
+        const activeRule = rules.find(x => x.id === activeRuleId);
+        const color = activeRule ? activeRule.color : '#f59e0b';
+
+        modalCtx.strokeStyle = color;
+        modalCtx.lineWidth = 3;
+        modalCtx.strokeRect(rx, ry, rw, rh);
+        modalCtx.fillStyle = hexToRgba(color, 0.25);
+        modalCtx.fillRect(rx, ry, rw, rh);
+
+        if (rw > 0 && rh > 0) {
+          modalPreviewCanvas.width = rw;
+          modalPreviewCanvas.height = rh;
+          const cropped = modalCtx.getImageData(rx, ry, rw, rh);
+          modalPreviewCtx.putImageData(cropped, 0, 0);
+        }
+      }
+
+      document.querySelectorAll('.modal-nudge-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const dir = e.target.dataset.dir;
+          const step = 0.002;
+
+          if (dir === 'up') tempRoi.y = Math.max(0, tempRoi.y - step);
+          if (dir === 'down') tempRoi.y = Math.min(0.95, tempRoi.y + step);
+          if (dir === 'left') tempRoi.x = Math.max(0, tempRoi.x - step);
+          if (dir === 'right') tempRoi.x = Math.min(0.95, tempRoi.x + step);
+          if (dir === 'w_plus') tempRoi.w = Math.min(0.5, tempRoi.w + step);
+          if (dir === 'w_minus') tempRoi.w = Math.max(0.01, tempRoi.w - step);
+          if (dir === 'h_plus') tempRoi.h = Math.min(0.5, tempRoi.h + step);
+          if (dir === 'h_minus') tempRoi.h = Math.max(0.01, tempRoi.h - step);
+
+          renderModalCanvas();
+        });
+      });
+
+      function getModalCoords(e) {
+        const rect = modalCanvas.getBoundingClientRect();
+        const scaleX = modalCanvas.width / rect.width;
+        const scaleY = modalCanvas.height / rect.height;
+        return {
+          x: Math.max(0, Math.min(modalCanvas.width, (e.clientX - rect.left) * scaleX)),
+          y: Math.max(0, Math.min(modalCanvas.height, (e.clientY - rect.top) * scaleY))
+        };
+      }
+
+      modalCanvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        const pos = getModalCoords(e);
+        dragStart = pos;
+
+        tempRoi.x = pos.x / modalCanvas.width;
+        tempRoi.y = pos.y / modalCanvas.height;
+        tempRoi.w = 0.001;
+        tempRoi.h = 0.001;
+      });
+
+      modalCanvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const pos = getModalCoords(e);
+        const x = Math.min(pos.x, dragStart.x);
+        const y = Math.min(pos.y, dragStart.y);
+        const w = Math.abs(pos.x - dragStart.x);
+        const h = Math.abs(pos.y - dragStart.y);
+
+        tempRoi.x = x / modalCanvas.width;
+        tempRoi.y = y / modalCanvas.height;
+        tempRoi.w = Math.max(0.01, w / modalCanvas.width);
+        tempRoi.h = Math.max(0.01, h / modalCanvas.height);
+
+        renderModalCanvas();
+      });
+
+      window.addEventListener('mouseup', () => { isDragging = false; });
+
+      cancelCropBtn.addEventListener('click', () => {
+        cropModal.classList.add('hidden');
+      });
+
+      saveCropBtn.addEventListener('click', () => {
+        const r = rules.find(x => x.id === activeRuleId);
+        if (r) {
+          r.roi = { ...tempRoi };
+
+          const rx = r.roi.x * modalCanvas.width;
+          const ry = r.roi.y * modalCanvas.height;
+          const rw = r.roi.w * modalCanvas.width;
+          const rh = r.roi.h * modalCanvas.height;
+
+          if (rw > 0 && rh > 0) {
+            r.targetImageData = modalCtx.getImageData(rx, ry, rw, rh);
+          }
+        }
+
+        cropModal.classList.add('hidden');
+        renderRulesUI();
+      });
+
+      addRuleBtn.addEventListener('click', () => {
+        const newId = rules.length ? Math.max(...rules.map(x => x.id)) + 1 : 1;
+        const assignedColor = defaultColors[(newId - 1) % defaultColors.length];
+        rules.push({
+          id: newId,
+          name: `規則 ${newId}`,
+          roi: { x: 0.3, y: 0.8, w: 0.12, h: 0.1 },
+          targetImageData: null, 
+          threshold: 75,
+          soundType: 'beep2',
+          customAudioUrl: null,
+          color: assignedColor,
+          enabled: true,
+          lastTrigger: 0,
+          currentSim: 0
+        });
+        activeRuleId = newId;
+        renderRulesUI();
+      });
+
+      startBtn.addEventListener('click', async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          alert('您的瀏覽器不支援畫面擷取 API！');
+          return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 30 } }
+          });
+          video.srcObject = stream;
+
+          video.onloadeddata = () => {
+            video.play();
+            isCapturing = true;
+            mainCanvas.width = video.videoWidth;
+            mainCanvas.height = video.videoHeight;
+            renderLoop();
+          };
+        } catch (err) {
+          if (err.name !== 'NotAllowedError') {
+            alert('無法開啟畫面擷取：' + err.message);
+          }
         }
       });
 
-      bindUIEvents();
-    }
+      function renderLoop() {
+        if (!isCapturing) return;
 
-    function bindUIEvents() {
-      document.querySelectorAll('.rule-name-input').forEach(input => {
-        input.addEventListener('input', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          if (r) r.name = e.target.value;
-        });
-      });
+        if (video.readyState >= 2) {
+          ctx.drawImage(video, 0, 0, mainCanvas.width, mainCanvas.height);
 
-      document.querySelectorAll('.select-rule-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          activeRuleId = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === activeRuleId);
-          currentEditingText.textContent = `當前編輯：${r.name}`;
-          renderRulesUI();
-        });
-      });
+          rules.forEach(rule => {
+            const rx = rule.roi.x * mainCanvas.width;
+            const ry = rule.roi.y * mainCanvas.height;
+            const rw = rule.roi.w * mainCanvas.width;
+            const rh = rule.roi.h * mainCanvas.height;
 
-      document.querySelectorAll('.capture-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          if (!r || !isCapturing) return;
+            const isActive = rule.id === activeRuleId;
 
-          const rx = r.roi.x * mainCanvas.width;
-          const ry = r.roi.y * mainCanvas.height;
-          const rw = r.roi.w * mainCanvas.width;
-          const rh = r.roi.h * mainCanvas.height;
+            if (rule.enabled && rule.targetImageData && rw > 0 && rh > 0) {
+              const currentImgData = ctx.getImageData(rx, ry, rw, rh);
+              const sim = calcIoUSimilarity(currentImgData, rule.targetImageData);
+              rule.currentSim = sim;
 
-          if (rw > 0 && rh > 0) {
-            r.targetImageData = ctx.getImageData(rx, ry, rw, rh);
-            renderRulesUI();
+              const simEl = document.getElementById(`sim_${rule.id}`);
+              if (simEl) simEl.textContent = `${sim.toFixed(1)}%`;
+
+              if (sim >= rule.threshold) {
+                const now = Date.now();
+                if (now - rule.lastTrigger > 3500) {
+                  rule.lastTrigger = now;
+                  playSound(rule);
+                }
+              }
+            }
+
+            if (showOverlayToggle.checked && rule.targetImageData !== null) {
+              const strokeColor = rule.enabled ? (rule.color || '#f59e0b') : '#64748b';
+              ctx.strokeStyle = strokeColor;
+              ctx.lineWidth = isActive ? 3 : 1.5;
+              ctx.strokeRect(rx, ry, rw, rh);
+
+              if (isActive) {
+                ctx.fillStyle = hexToRgba(strokeColor, 0.15);
+                ctx.fillRect(rx, ry, rw, rh);
+              }
+            }
+          });
+        }
+
+        requestAnimationFrame(renderLoop);
+      }
+
+      function calcIoUSimilarity(img1, img2) {
+        if (!img1 || !img2 || img1.data.length !== img2.data.length) return 0;
+
+        const d1 = img1.data;
+        const d2 = img2.data;
+
+        let intersection = 0;
+        let union = 0;
+
+        for (let i = 0; i < d1.length; i += 4) {
+          const lum1 = d1[i] * 0.299 + d1[i+1] * 0.587 + d1[i+2] * 0.114;
+          const lum2 = d2[i] * 0.299 + d2[i+1] * 0.587 + d2[i+2] * 0.114;
+
+          const bin1 = lum1 > 140 ? 1 : 0;
+          const bin2 = lum2 > 140 ? 1 : 0;
+
+          if (bin1 === 1 && bin2 === 1) intersection++;
+          if (bin1 === 1 || bin2 === 1) union++;
+        }
+
+        if (union === 0) return 0;
+        return (intersection / union) * 100;
+      }
+
+      function playSound(rule) {
+        if (rule.soundType === 'custom' && rule.customAudioUrl) {
+          const audio = new Audio(rule.customAudioUrl);
+          audio.play().catch(()=>{});
+          return;
+        }
+
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          const audioCtx = new AudioCtx();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          if (rule.soundType === 'beep1') {
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+          } else if (rule.soundType === 'beep2') {
+            osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(1500, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+          } else if (rule.soundType === 'siren') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(1600, audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.25);
           }
-        });
-      });
+        } catch (e) {}
+      }
 
-      document.querySelectorAll('.threshold-slider').forEach(slider => {
-        slider.addEventListener('input', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          if (r) r.threshold = parseInt(e.target.value);
-          renderRulesUI();
-        });
-      });
-
-      document.querySelectorAll('.rule-enable-toggle').forEach(toggle => {
-        toggle.addEventListener('change', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          if (r) r.enabled = e.target.checked;
-        });
-      });
-
-      document.querySelectorAll('.delete-rule-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          rules = rules.filter(x => x.id !== id);
-          if (activeRuleId === id && rules.length > 0) activeRuleId = rules[0].id;
-          renderRulesUI();
-        });
-      });
-
-      document.querySelectorAll('.sound-select').forEach(select => {
-        select.addEventListener('change', (e) => {
-          const id = parseInt(e.target.dataset.id);
-          const r = rules.find(x => x.id === id);
-          if (r) {
-            r.soundType = e
+      initColorPresets();
+      renderRulesUI();
+    });
+  </script>
+</body>
+</html>
