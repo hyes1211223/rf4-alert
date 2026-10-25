@@ -77,8 +77,9 @@ details[open]>summary .arr{transform:rotate(180deg)}
     <div class="flex items-center gap-3 min-w-0">
       <div class="min-w-0">
         <h1 class="text-lg md:text-xl font-bold flex flex-wrap items-center gap-2">俄羅斯釣魚4提示小助手
+          <span id="verChip" class="chip bg-[#ece6ff] text-[#7f74b4]">v1.0 BETA</span>
           <span id="liveChip" class="chip bg-white/80 text-[#7f74b4]">未擷取</span></h1>
-        <p class="lbl mt-0.5">文字摳圖比對 · 雙向重置連動 · Hold持續確認 · Clear消失鎖定 · ZIP 設定同步</p>
+        <p class="lbl mt-0.5">文字摳圖比對 · 持續判定 · 觸發後鎖定 · 消失解鎖 · 雙向重置連動 · ZIP 設定同步</p>
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
@@ -191,6 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const cropModal=$('cropModal'),modalCanvas=$('modalCanvas'),modalCtx=modalCanvas.getContext('2d');
   const modalPreviewCanvas=$('modalPreviewCanvas');
   const colorModal=$('colorModal'),modalColorPicker=$('modalColorPicker'),modalColorPreview=$('modalColorPreview');
+  const APP_VERSION='1.0 BETA',SCHEMA=1;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
+  $('verChip').title=`程式版本 ${APP_VERSION} · 設定檔格式 v${SCHEMA}`;$('verChip').textContent='v'+APP_VERSION;
   let audioCtx=null,isCapturing=false,isDragging=false,dragStart={x:0,y:0},snapshotImgData=null,tempRoi={x:.2,y:.85,w:.15,h:.08},tempSens=45;
   const defaultColors=['#f59e0b','#ef4444','#3b82f6','#10b981','#a855f7','#ec4899','#06b6d4'];
   let colorSelectingRuleId=null,pendingColor='#f59e0b';
@@ -222,9 +225,9 @@ document.addEventListener('DOMContentLoaded', () => {
     isMuted:false,
     resetsTargets:[],
     resetBySources:[],
-    holdEnabled:false,
-    holdTime:3.0,
+    persistTime:0,
     holdStartTime:0,
+    lockEnabled:false,
     clearEnabled:false,
     clearTime:3.0,
     clearStartTime:0,
@@ -232,7 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
     currentSim:0,
     inkSens:45,
     _open:false,
-    _wasHit:false,
+    _confirmed:false,
+    _missAt:0,
     _lastReset:0,
     _cooldownTimer:null,
     ...o
@@ -338,8 +342,8 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- 狀態與 UI 連動 ---------- */
   function refreshStatus(r){
     const el=$('status_'+r.id);if(!el)return;
-    el.innerHTML=(r.isCoolingDown?`<span class="chip bg-[#ffe3ef] text-[#d9467e] animate-pulse">冷卻中 (${r.cooldown}s)</span>`:'')+(r.isMuted?`<span class="chip bg-[#fff1cc] text-[#a86b00]">已靜音${(r.resetsTargets||[]).length?'（仍會連動重置）':''} · 點鈴鐺解除</span>`:'')+(r.soundType==='none'?'<span class="chip bg-[#e0f2fe] text-[#0284c7]">無聲模式 · 只做連動重置</span>':'');
-    el.className=(r.isCoolingDown||r.isMuted||r.soundType==='none')?'flex flex-wrap gap-1.5':'hidden';
+    el.innerHTML=(r.isCoolingDown?`<span class="chip bg-[#ffe3ef] text-[#d9467e] animate-pulse">冷卻中 (${r.cooldown}s)</span>`:'')+(r.isMuted?`<span class="chip bg-[#fff1cc] text-[#a86b00]">已靜音${(r.resetsTargets||[]).length?'（仍會連動重置）':''} · 點鈴鐺解除</span>`:'')+(r.soundType==='none'?'<span class="chip bg-[#e0f2fe] text-[#0284c7]">無聲模式 · 只做連動重置</span>':'')+(r.isClearLocked?`<button type="button" data-id="${r.id}" class="unlock-btn chip bg-[#e0f2fe] text-[#0284c7] cursor-pointer hover:brightness-95">🔒 已鎖定 · ${r.clearEnabled?`目標消失 ${r.clearTime} 秒後解鎖`:'等待其他規則重置'}（點此解除）</button>`:'');
+    el.className=(r.isCoolingDown||r.isMuted||r.soundType==='none'||r.isClearLocked)?'flex flex-wrap gap-1.5':'hidden';
     const b=$('mute_'+r.id);if(b)b.textContent=r.isMuted?'🔕':'🔔';
     const c=$('count_'+r.id);if(c)c.textContent=`${r.currentAlerts}/${r.maxAlerts}`;
   }
@@ -390,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tgt.isCoolingDown=false;
         tgt.isClearLocked=false;
         tgt.holdStartTime=0;
+        tgt._confirmed=false;tgt._missAt=0;
         tgt.clearStartTime=0;
         tgt.lastMatchTime=0;
         if(tgt._cooldownTimer){
@@ -460,27 +465,23 @@ document.addEventListener('DOMContentLoaded', () => {
         <details data-id="${id}" ${r._open?'open':''} class="pt-2 border-t border-[#e6dfff]">
           <summary><span>進階防誤判與連動設定</span><span class="arr">▾</span></summary>
           <div class="space-y-3 pt-2">
-            <div class="grid grid-cols-2 gap-2 soft p-2.5 text-xs">
-              <div class="space-y-1.5">
-                <div class="flex items-center justify-between font-bold text-[#5b46b8]">
-                  <span>Hold 持續確認</span>
-                  <input type="checkbox" class="sw hold-enable-toggle" data-id="${id}" ${r.holdEnabled?'checked':''}>
-                </div>
-                <label class="flex items-center justify-between gap-1 text-[11px] text-[#7f74b4]">
-                  <span>連續達標</span>
-                  <div class="flex items-center gap-0.5"><input type="number" min="0.1" max="30" step="0.5" value="${r.holdTime||3.0}" data-id="${id}" class="hold-time-input field !py-0.5 !px-1 text-center w-12 font-bold"><span class="lbl">秒</span></div>
-                </label>
+            <div class="soft p-3 space-y-2.5 text-xs">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0"><div class="font-bold text-[#5b46b8]">持續判定</div><div class="text-[11px] leading-snug text-[#7f74b4]">相似度連續達標多久才觸發（0＝立即）</div></div>
+                <div class="flex items-center gap-0.5 shrink-0"><input type="number" min="0" max="60" step="0.1" value="${r.persistTime}" data-id="${id}" class="persist-time-input field !py-0.5 !px-1 text-center w-14 font-bold"><span class="lbl">秒</span></div>
               </div>
-              <div class="space-y-1.5 border-l border-[#e6dfff] pl-2.5">
-                <div class="flex items-center justify-between font-bold text-[#3b9be0]">
-                  <span>Clear 消失鎖定</span>
-                  <input type="checkbox" class="sw clear-enable-toggle" data-id="${id}" ${r.clearEnabled?'checked':''}>
+              <div class="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-[#e6dfff]">
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between font-bold text-[#5b46b8]"><span>Hold 觸發後鎖定</span><input type="checkbox" class="sw lock-enable-toggle" data-id="${id}" ${r.lockEnabled?'checked':''}></div>
+                  <p class="text-[11px] leading-snug text-[#7f74b4]">觸發一次後，不再發聲、不再連動</p>
                 </div>
-                <label class="flex items-center justify-between gap-1 text-[11px] text-[#7f74b4]">
-                  <span>乾淨解鎖</span>
-                  <div class="flex items-center gap-0.5"><input type="number" min="0.1" max="30" step="0.5" value="${r.clearTime||3.0}" data-id="${id}" class="clear-time-input field !py-0.5 !px-1 text-center w-12 font-bold"><span class="lbl">秒</span></div>
-                </label>
+                <div class="space-y-1 border-l border-[#e6dfff] pl-2.5 ${r.lockEnabled?'':'opacity-45'}">
+                  <div class="flex items-center justify-between font-bold text-[#3b9be0]"><span>Clear 消失解鎖</span><input type="checkbox" class="sw clear-enable-toggle" data-id="${id}" ${r.clearEnabled?'checked':''} ${r.lockEnabled?'':'disabled'}></div>
+                  <label class="flex items-center justify-between gap-1 text-[11px] text-[#7f74b4]"><span>消失超過</span>
+                    <div class="flex items-center gap-0.5"><input type="number" min="0.1" max="60" step="0.5" value="${r.clearTime||3.0}" data-id="${id}" class="clear-time-input field !py-0.5 !px-1 text-center w-12 font-bold"><span class="lbl">秒</span></div></label>
+                </div>
               </div>
+              <p class="text-[11px] leading-snug text-[#7f74b4]">鎖定後，目標消失超過設定秒數才解鎖繼續判定與發聲。Clear 關閉時，會一直鎖定到被其他規則連動重置，或點狀態列的「點此解除」。</p>
             </div>
 
             <div class="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
@@ -553,6 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
       cropModal.classList.remove('hidden');renderModalCanvas();
     }
     else if(t.closest('.test-sound-btn')){playSound(r);}
+    else if(t.closest('.unlock-btn')){r.isClearLocked=false;r.clearStartTime=0;refreshStatus(r);}
     else if(t.closest('.mute-toggle-btn')){r.isMuted=!r.isMuted;if(!r.isMuted)r.currentAlerts=0;refreshStatus(r);}
     else if(t.closest('.delete-rule-btn')){
       rules=rules.filter(x=>x.id!==r.id);
@@ -570,7 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(t.classList.contains('rule-name-input')){r.name=t.value;markActive();}
     else if(t.classList.contains('cooldown-number-input')){const v=parseFloat(t.value);if(!isNaN(v))r.cooldown=Math.max(.5,v);}
     else if(t.classList.contains('max-alerts-input')){const v=parseInt(t.value);if(!isNaN(v)){r.maxAlerts=Math.max(1,v);refreshStatus(r);}}
-    else if(t.classList.contains('hold-time-input')){const v=parseFloat(t.value);if(!isNaN(v))r.holdTime=Math.max(0.1,v);}
+    else if(t.classList.contains('persist-time-input')){const v=parseFloat(t.value);if(!isNaN(v)){r.persistTime=Math.max(0,v);r.holdStartTime=0;}}
     else if(t.classList.contains('clear-time-input')){const v=parseFloat(t.value);if(!isNaN(v))r.clearTime=Math.max(0.1,v);}
   });
 
@@ -578,8 +580,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const t=e.target,r=ruleOf(t);if(!r)return;
     if(t.classList.contains('rule-enable-toggle')){r.enabled=t.checked;renderRulesUI();}
     else if(t.classList.contains('never-mute-toggle'))r.neverMute=t.checked;
-    else if(t.classList.contains('hold-enable-toggle')){r.holdEnabled=t.checked;r.holdStartTime=0;}
-    else if(t.classList.contains('clear-enable-toggle')){r.clearEnabled=t.checked;r.clearStartTime=0;r.isClearLocked=false;}
+    else if(t.classList.contains('lock-enable-toggle')){r.lockEnabled=t.checked;r.clearStartTime=0;if(!t.checked)r.isClearLocked=false;r._open=true;renderRulesUI();}
+    else if(t.classList.contains('clear-enable-toggle')){r.clearEnabled=t.checked;r.clearStartTime=0;r._open=true;refreshStatus(r);}
     else if(t.classList.contains('reset-target-check')){
       const srcId=parseInt(t.dataset.sourceId),tgtId=parseInt(t.dataset.targetId);
       toggleResetLink(srcId,tgtId,true,t.checked);
@@ -594,7 +596,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('enableAllBtn').onclick=()=>{rules.forEach(r=>r.enabled=true);renderRulesUI();};
   $('disableAllBtn').onclick=()=>{rules.forEach(r=>r.enabled=false);renderRulesUI();};
-  $('unmuteAllBtn').onclick=()=>{rules.forEach(r=>{r.isMuted=false;r.currentAlerts=0;refreshStatus(r);});};
+  $('unmuteAllBtn').title='解除所有規則的靜音與鎖定';
+  $('unmuteAllBtn').onclick=()=>{rules.forEach(r=>{r.isMuted=false;r.currentAlerts=0;r.isClearLocked=false;r.clearStartTime=0;refreshStatus(r);});};
   $('addRuleBtn').onclick=()=>{
     const id=rules.length?Math.max(...rules.map(x=>x.id))+1:1;
     rules.push(makeRule({id,name:`規則 ${id}`,color:defaultColors[(id-1)%defaultColors.length]}));activeRuleId=id;renderRulesUI();
@@ -644,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
   modalCanvas.addEventListener('pointerup',()=>{isDragging=false;});
   $('cancelCropBtn').onclick=()=>cropModal.classList.add('hidden');
   $('resetCropBtn').onclick=()=>{tempRoi={x:0,y:0,w:0,h:0};renderModalCanvas();};
-  function resetRuleState(r){r.currentAlerts=0;r.lastMatchTime=0;r.isMuted=false;r.isClearLocked=false;r.holdStartTime=0;r.clearStartTime=0;r._hist=[];r._tc={};r.inkSens=tempSens;}
+  function resetRuleState(r){r.currentAlerts=0;r.lastMatchTime=0;r.isMuted=false;r.isClearLocked=false;r.holdStartTime=0;r._confirmed=false;r._missAt=0;r.clearStartTime=0;r._hist=[];r._tc={};r.inkSens=tempSens;}
   $('saveRoiOnlyBtn').onclick=()=>{const r=rules.find(x=>x.id===activeRuleId);if(r){r.roi={...tempRoi};resetRuleState(r);}cropModal.classList.add('hidden');renderRulesUI();};
   $('saveCropBtn').onclick=()=>{
     const r=rules.find(x=>x.id===activeRuleId);
@@ -656,36 +659,44 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- ZIP 匯出 / 匯入補齊 ---------- */
   const b64ToImg=b64=>new Promise(res=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));};i.src=b64;});
   $('exportZipBtn').onclick=async()=>{
-    const zip=new JSZip(),keys=['id','name','roi','threshold','soundType','customAudioFileName','color','enabled','cooldown','maxAlerts','neverMute','resetsTargets','resetBySources','holdEnabled','holdTime','clearEnabled','clearTime','inkSens'];
+    const zip=new JSZip(),keys=['id','name','roi','threshold','soundType','customAudioFileName','color','enabled','cooldown','maxAlerts','neverMute','resetsTargets','resetBySources','persistTime','lockEnabled','clearEnabled','clearTime','inkSens'];
     zip.file('config.json',JSON.stringify(rules.map(r=>{const o={};keys.forEach(k=>o[k]=r[k]);o.targetImageBase64=r.targetImageData?imgToCanvas(r.targetImageData).toDataURL():null;return o;}),null,2));
+    zip.file('meta.json',JSON.stringify({app:'RF4 提示小助手',appVersion:APP_VERSION,schema:SCHEMA,exportedAt:new Date().toISOString()},null,2));
     const af=zip.folder('audio');
     for(const r of rules)if(r.customAudioUrl&&r.customAudioFileName){try{af.file(r.customAudioFileName,await(await fetch(r.customAudioUrl)).blob());}catch(e){}}
     const url=URL.createObjectURL(await zip.generateAsync({type:'blob'})),a=document.createElement('a');
     a.href=url;a.download=`RF4_Alert_Config_${new Date().toISOString().slice(0,10)}.zip`;a.click();URL.revokeObjectURL(url);
   };
+  // 舊版設定轉換：Hold 持續確認 → 持續判定；舊 Clear 消失鎖定（鎖定＋消失解鎖）→ 觸發後鎖定＋消失解鎖
+  function migrateRule(it){
+    const o={...it};
+    if(o.persistTime===undefined){o.persistTime=o.holdEnabled?(parseFloat(o.holdTime)||3):0;o.lockEnabled=!!o.clearEnabled;}
+    delete o.holdEnabled;delete o.holdTime;
+    o.persistTime=Math.max(0,parseFloat(o.persistTime)||0);o.lockEnabled=!!o.lockEnabled;o.clearEnabled=!!o.clearEnabled;o.clearTime=Math.max(.1,parseFloat(o.clearTime)||3);
+    return o;
+  }
   $('importZipInput').addEventListener('change',async e=>{
     const file=e.target.files[0];if(!file)return;
     try{
       const z=await new JSZip().loadAsync(file),cf=z.file('config.json');if(!cf){alert('壓縮檔內找不到 config.json 設定檔！');return;}
-      const data=JSON.parse(await cf.async('text')),next=[];
+      const raw=JSON.parse(await cf.async('text')),data=Array.isArray(raw)?raw:(raw.rules||[]),next=[];
+      let meta=null;const mf=z.file('meta.json');if(mf){try{meta=JSON.parse(await mf.async('text'));}catch(_){}}
       for(const it of data){
         let url=null;if(it.customAudioFileName){const af=z.file(`audio/${it.customAudioFileName}`);if(af)url=URL.createObjectURL(await af.async('blob'));}
-        const{targetImageBase64,...rest}=it;
+        const{targetImageBase64,...rest0}=it,rest=migrateRule(rest0);
         next.push(makeRule({
           ...rest,
           customAudioUrl:url,
           targetImageData:targetImageBase64?await b64ToImg(targetImageBase64):defaultUncastImageData,
           neverMute:it.neverMute||false,
-          holdEnabled:it.holdEnabled||false,
-          holdTime:it.holdTime||3.0,
-          clearEnabled:it.clearEnabled||false,
-          clearTime:it.clearTime||3.0,
           resetsTargets:it.resetsTargets||[],
           resetBySources:it.resetBySources||[],
           inkSens:it.inkSens||45
         }));
       }
-      rules=next;if(rules.length)activeRuleId=rules[0].id;renderRulesUI();alert('設定與音效包匯入成功！');
+      rules=next;if(rules.length)activeRuleId=rules[0].id;renderRulesUI();
+      const ver=meta?`（來自 v${meta.appVersion||'?'}）`:'（來自舊版，未標示版本）';
+      alert('設定與音效包匯入成功！'+ver+(meta&&meta.schema>SCHEMA?'\n\n注意：這份設定來自較新的版本，部分新功能設定會被忽略。':''));
     }catch(err){alert('匯入失敗，壓縮檔格式可能有誤：'+err.message);}
     e.target.value='';
   });
@@ -763,43 +774,46 @@ document.addEventListener('DOMContentLoaded', () => {
   function setLive(on){startBtn.textContent=on?'重新選擇視窗':'開啟畫面分享';updateLiveChip(Date.now());}
 
   const SKY='bg-[#e0f2fe] text-[#0284c7]',HOLD='bg-[#f3e8ff] text-[#7e22ce] animate-pulse';
+  function lockRule(rule){if(rule.lockEnabled&&!rule.isClearLocked){rule.isClearLocked=true;rule.clearStartTime=0;refreshStatus(rule);}}
+  // 流程：相似度達標 → 持續判定（persistTime）→ 觸發（發聲＋連動重置）→ 鎖定（lockEnabled）→ 目標消失超過 clearTime → 解鎖
   function handleMatch(rule,sim,now){
-    const hit=sim>=rule.threshold,rising=hit&&!rule._wasHit;
+    const hit=sim>=rule.threshold;
     let label=hit?'偵測到目標':'待機中',cls=hit?ST.on:ST.idle;
     if(hit){
-      rule.lastMatchTime=now;rule.clearStartTime=0;
-      if(rule.isClearLocked){label='等待目標消失解鎖';cls=SKY;}
+      rule.lastMatchTime=now;rule.clearStartTime=0;rule._missAt=0;
+      if(rule.isClearLocked){label=rule.clearEnabled?'🔒 鎖定中 · 目標仍在':'🔒 鎖定中 · 等待重置';cls=SKY;}
       else{
-        let holdReady=true;
-        if(rule.holdEnabled){
+        const need=Math.max(0,rule.persistTime||0);let ready=true;
+        if(need>0){
           if(!rule.holdStartTime)rule.holdStartTime=now;
-          const el=(now-rule.holdStartTime)/1000,req=rule.holdTime||3;
-          if(el<req){holdReady=false;label=`持續確認中 ${el.toFixed(1)}/${req}s`;cls=HOLD;}
+          const el=(now-rule.holdStartTime)/1000;
+          if(el<need){ready=false;label=`持續判定中 ${el.toFixed(1)}/${need}s`;cls=HOLD;}
         }
-        if(holdReady){
+        if(ready){
+          const first=!rule._confirmed;
           if(!rule.isCoolingDown){
             const silent=rule.isMuted,counts=!silent&&rule.soundType!=='none';
             if(counts)rule.currentAlerts++;
             triggerAlert(rule,silent);                      // 發聲（靜音/無聲模式不發）＋冷卻＋連動重置
             if(counts&&!rule.neverMute&&rule.currentAlerts>=rule.maxAlerts)rule.isMuted=true;   // 發完最後一次才靜音
-            refreshStatus(rule);rule.holdStartTime=0;
-            if(rule.clearEnabled){rule.isClearLocked=true;rule.clearStartTime=0;}
-          }else if(rising&&now-(rule._lastReset||0)>500){   // 冷卻中字樣才剛出現：不發聲，但立刻連動重置
-            rule._lastReset=now;executeResets(rule);
+            refreshStatus(rule);lockRule(rule);
+          }else if(first&&now-(rule._lastReset||0)>500){    // 冷卻中才剛確認：不發聲，但立刻連動重置
+            rule._lastReset=now;executeResets(rule);lockRule(rule);
           }
+          rule._confirmed=true;
         }
       }
     }else{
-      rule.holdStartTime=0;
-      if(rule.clearEnabled&&rule.isClearLocked){
+      if(!rule._missAt)rule._missAt=now;
+      if(now-rule._missAt>300){rule.holdStartTime=0;rule._confirmed=false;}   // 短暫掉幀（0.3 秒內）不中斷持續判定
+      if(rule.isClearLocked&&rule.clearEnabled){
         if(!rule.clearStartTime)rule.clearStartTime=now;
-        const el=(now-rule.clearStartTime)/1000,req=rule.clearTime||3;
-        if(el>=req){rule.isClearLocked=false;rule.clearStartTime=0;}
-        else{label=`等待消失 ${el.toFixed(1)}/${req}s`;cls=SKY;}
-      }
+        const el=(now-rule.clearStartTime)/1000,req=Math.max(.1,rule.clearTime||3);
+        if(el>=req){rule.isClearLocked=false;rule.clearStartTime=0;refreshStatus(rule);}
+        else{label=`🔒 等待消失 ${el.toFixed(1)}/${req}s`;cls=SKY;}
+      }else if(rule.isClearLocked){label='🔒 鎖定中 · 等待重置';cls=SKY;}
       if(rule.currentAlerts>0&&!rule.isMuted&&now-rule.lastMatchTime>3500){rule.currentAlerts=0;refreshStatus(rule);}
     }
-    rule._wasHit=hit;
     setState(rule,label,cls);
   }
 
