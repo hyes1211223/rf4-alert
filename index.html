@@ -122,6 +122,7 @@ details[open]>summary .arr{transform:rotate(180deg)}
       <aside id="statusRail" class="glass p-2.5 flex flex-col gap-1.5 overflow-y-auto soft-scroll">
         <div class="shrink-0 px-1 flex items-center justify-between gap-2"><h2 class="font-bold text-sm">📋 狀態</h2><span id="spGroup" class="chip bg-[#ece6ff] text-[#5b46b8] truncate" style="max-width:8.5rem"></span></div>
         <div id="spList"><div class="sp-sec">固定功能</div><div id="spFixed" class="space-y-1"></div><div class="sp-sec">規則</div><div id="spRules" class="space-y-1"></div></div>
+        <div id="railPerf" class="lbl text-[10px] text-center pt-1"></div>
       </aside>
       <div id="logoSlot" class="flex justify-center items-end pb-1"></div>
     </div>
@@ -156,6 +157,14 @@ details[open]>summary .arr{transform:rotate(180deg)}
           <button id="disableAllBtn" class="btn btn-sm btn-ghost">全部停用</button>
           <button id="unmuteAllBtn" class="btn btn-sm btn-ghost">解除全靜音</button>
         </div>
+        <details id="perfBox" class="soft p-2.5 text-xs">
+          <summary class="font-bold text-[#5b46b8] cursor-pointer">⚙ 效能與延遲 <span id="perfLive" class="lbl text-[10px]"></span></summary>
+          <div class="space-y-2 pt-2">
+            <div class="flex items-center justify-between gap-2"><span class="lbl" title="只影響畫面預覽，不影響偵測">預覽畫面</span><select id="perfPreview" class="field !py-0.5"><option value="0">關閉</option><option value="5">5 fps</option><option value="15">15 fps</option><option value="30">30 fps</option><option value="60">不限制</option></select></div>
+            <div class="flex items-center justify-between gap-2"><span class="lbl" title="每秒最多比對幾次；越高越即時、越吃效能">判斷頻率</span><select id="perfDetect" class="field !py-0.5"><option value="5">每秒 5 次</option><option value="10">每秒 10 次</option><option value="20">每秒 20 次</option></select></div>
+            <label class="flex items-center justify-between gap-2" title="遊戲畫面沒更新時，不重複做同一張畫面的比對（遊戲降 FPS 時更省）"><span class="lbl">跟著遊戲畫面更新</span><input type="checkbox" id="perfSync" class="sw"></label>
+          </div>
+        </details>
       </div>
       <div id="scrollArea" class="space-y-3 p-1 pr-2 pb-3 lg:pb-24 lg:flex-1 lg:min-h-0 lg:overflow-y-auto soft-scroll"><div id="rulesContainer" class="space-y-3"></div></div>
     </section>
@@ -188,6 +197,7 @@ details[open]>summary .arr{transform:rotate(180deg)}
 <div id="cropModal" class="hidden fixed inset-0 bg-[#3b2f6e]/55 z-50 flex flex-col p-3 md:p-5 gap-3 backdrop-blur-sm">
   <div class="glass !bg-white/85 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
     <div><h2 class="font-bold">調整監控範圍與摳字</h2>
+      <p id="zoomHint" class="text-[11px] font-bold text-[#8b6cff]"></p>
       <p id="modalHint" class="lbl">畫面已凍結。拖曳框選目標（盡量只框文字／圖示），粉紅色就是系統摳出來要比對的筆畫。方向鍵可微調，Esc 取消。</p></div>
     <div class="flex flex-wrap gap-2">
       <button id="resetCropBtn" class="btn btn-sm btn-danger">清空重選</button>
@@ -195,6 +205,13 @@ details[open]>summary .arr{transform:rotate(180deg)}
       <button id="saveRoiOnlyBtn" class="btn btn-sm btn-ghost" title="只改位置，保留原本的比對圖">只更新範圍</button>
       <button id="saveCropBtn" class="btn btn-sm btn-primary" title="範圍與比對圖都改成目前框選內容">更新範圍與比對圖</button>
     </div>
+  </div>
+  <div class="glass !bg-white/85 px-3 py-2 flex flex-wrap items-center gap-1.5 text-xs">
+    <button id="zoomOutBtn" class="btn btn-sm btn-ghost" title="縮小（滾輪往下）">－</button><b id="zoomLbl" class="w-14 text-center text-[#5b46b8]">1.0×</b><button id="zoomInBtn" class="btn btn-sm btn-ghost" title="放大（滾輪往上）">＋</button>
+    <button id="zoomFitBtn" class="btn btn-sm btn-ghost" title="縮放到剛好看見目前框選範圍">符合框選</button><button id="zoomAllBtn" class="btn btn-sm btn-ghost">全畫面</button><button id="zoom11Btn" class="btn btn-sm btn-ghost" title="一個畫面像素＝螢幕上一個點">1:1</button>
+    <label class="flex items-center gap-1 ml-1" title="放大到每個像素夠大時，畫出像素格線"><input type="checkbox" id="gridChk">像素格線</label>
+    <span class="mx-1 text-[#cfc6ff]">|</span>
+    <button id="undoRoiBtn" class="btn btn-sm btn-ghost" title="上一步（Ctrl+Z）">↶ 上一步</button><button id="redoRoiBtn" class="btn btn-sm btn-ghost" title="下一步（Ctrl+Y）">↷ 下一步</button><button id="revertRoiBtn" class="btn btn-sm btn-ghost" title="回到打開視窗時的範圍">還原</button>
   </div>
   <div class="flex-1 grid gap-3 lg:grid-cols-[minmax(0,1fr)_310px] min-h-0">
     <div class="frame flex items-center justify-center min-h-[200px]"><canvas id="modalCanvas" class="max-w-full max-h-full cursor-crosshair"></canvas></div>
@@ -207,7 +224,7 @@ details[open]>summary .arr{transform:rotate(180deg)}
         <p class="lbl text-[11px]">粉紅太少就往右、連背景也變粉紅就往左</p>
       </div>
       <div class="flex items-center justify-between"><span class="lbl">微調幅度</span>
-        <select id="stepSel" class="field"><option value="0.001">細 0.1%</option><option value="0.002" selected>中 0.2%</option><option value="0.005">粗 0.5%</option></select></div>
+        <select id="stepSel" class="field"><option value="p1" selected>1 像素</option><option value="p2">2 像素</option><option value="p5">5 像素</option><option value="p10">10 像素</option><option value="f0.001">0.1%</option><option value="f0.005">0.5%</option></select></div>
       <div>
         <div class="text-xs font-bold text-[#8b6cff] mb-1.5">整體平移</div>
         <div class="grid grid-cols-3 gap-1.5 w-40 mx-auto">
@@ -237,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const cropModal=$('cropModal'),modalCanvas=$('modalCanvas'),modalCtx=modalCanvas.getContext('2d');
   const modalPreviewCanvas=$('modalPreviewCanvas');
   const colorModal=$('colorModal'),modalColorPicker=$('modalColorPicker'),modalColorPreview=$('modalColorPreview');
-  const APP_VERSION='1.3.1 BETA',SCHEMA=3;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
+  const APP_VERSION='1.5 BETA',SCHEMA=3;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
   $('verChip').title=`程式版本 ${APP_VERSION} · 設定檔格式 v${SCHEMA}`;$('verChip').textContent='v'+APP_VERSION;
   let audioCtx=null,isCapturing=false,isDragging=false,dragStart={x:0,y:0},snapshotImgData=null,tempRoi={x:.2,y:.85,w:.15,h:.08},tempSens=45;
   let modalMode='rule',modalBar=null,tempColorMin=40;
@@ -260,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     soundType:'beep2',
     customAudioUrl:null,
     customAudioFileName:null,
+    stopMode:'none',stopFadeSec:.6,stopGone:true,stopReset:true,stopRod:true,
     volume:100,
     color:'#f59e0b',
     enabled:true,
@@ -436,6 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rule.resetsTargets.forEach(tgtId=>{
       const tgt=rules.find(r=>r.id===tgtId);
       if(tgt){
+        stopSound(tgt,'reset');
         tgt.isMuted=false;
         tgt.currentAlerts=0;
         tgt.isCoolingDown=false;
@@ -542,6 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="${r.soundType==='custom'?'':'hidden'} flex items-center justify-between gap-2 soft !py-1.5 !px-2.5"><span class="min-w-0 truncate text-xs ${r.customAudioFileName?'font-bold text-[#0f8a5f]':'font-bold text-[#d9467e]'}">${r.customAudioFileName?'✔ 目前音效：'+esc(r.customAudioFileName):'⚠ 尚未選擇音效檔'}</span><label class="btn btn-sm btn-ghost cursor-pointer shrink-0" title="選擇或更換音效檔">更換音效檔<input type="file" accept="audio/*" data-id="${id}" class="custom-audio-input" hidden></label></div>
             <div class="flex items-center gap-2 text-xs ${r.soundType==='none'?'opacity-45':''}"><span class="lbl shrink-0">音量</span><input type="range" min="0" max="100" value="${r.volume==null?100:r.volume}" data-id="${id}" class="rule-vol flex-1" aria-label="${esc(r.name)}音量"><b class="rvol-val w-10 text-right text-[#8b6cff]">${r.volume==null?100:r.volume}%</b></div>
+            ${stopBoxHTML(r,'rule')}
             <div class="flex items-center justify-between text-xs"><span>達到次數後不自動靜音</span><input type="checkbox" class="sw never-mute-toggle" data-id="${id}" ${r.neverMute?'checked':''}></div>
 
             <div class="soft p-2.5 space-y-2 text-xs">
@@ -595,8 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else if(t.closest('.open-crop-modal-btn')){
       if(!isCapturing){alert('請先點擊頂部的「開啟畫面分享」並選擇遊戲視窗！');return;}
       modalMode='rule';modalBar=null;setModalMode();activeRuleId=r.id;markActive();tempRoi={...r.roi};tempSens=r.inkSens;$('sensRange').value=tempSens;$('sensVal').textContent=tempSens;
-      modalCanvas.width=video.videoWidth||mainCanvas.width;modalCanvas.height=video.videoHeight||mainCanvas.height;
-      modalCtx.drawImage(video,0,0,modalCanvas.width,modalCanvas.height);snapshotImgData=modalCtx.getImageData(0,0,modalCanvas.width,modalCanvas.height);
+      takeSnap();
       cropModal.classList.remove('hidden');renderModalCanvas();
     }
     else if(t.closest('.test-sound-btn')){playSound(r);}
@@ -638,6 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleResetLink(srcId,tgtId,false,t.checked);
     }
     else if(t.classList.contains('rule-vol'))previewOnRelease(r);
+    else if(stopHandler(t,r)){r._open=true;renderRulesUI();}
     else if(t.classList.contains('sound-select')){r.soundType=t.value;r._open=true;renderRulesUI();}
     else if(t.classList.contains('custom-audio-input')){const f=t.files[0];if(f){r.customAudioUrl=URL.createObjectURL(f);r.customAudioFileName=f.name;r._open=true;renderRulesUI();}}
   });
@@ -662,47 +682,148 @@ document.addEventListener('DOMContentLoaded', () => {
   function hexToRgba(hex,a=.2){let c=(hex||'#f59e0b').replace('#','');if(c.length===3)c=c.split('').map(x=>x+x).join('');const n=parseInt(c,16);return`rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
 
   /* ---------- ROI Modal ---------- */
+  /* ---------- 框選視窗：滾輪縮放、右鍵平移、拖邊角微調、像素級微調、上一步 ---------- */
+  const snapCv=document.createElement('canvas'),snapCtx=snapCv.getContext('2d',{willReadFrequently:true});
+  let view={x:0,y:0,w:1,h:1},roiHist=[],roiPos=0,roiInit=null,pan=null,drag=null;
+  const MAXZ=20;
+  function clampView(){view.w=Math.min(1,Math.max(1/MAXZ,view.w));view.h=Math.min(1,Math.max(1/MAXZ,view.h));view.x=Math.min(1-view.w,Math.max(0,view.x));view.y=Math.min(1-view.h,Math.max(0,view.y));}
+  function snapRoi(r){
+    const W=snapCv.width,H=snapCv.height;if(!(r.w>0&&r.h>0)||!W)return r;
+    let x=Math.min(W-1,Math.max(0,Math.round(r.x*W))),y=Math.min(H-1,Math.max(0,Math.round(r.y*H))),w=Math.max(1,Math.round(r.w*W)),h=Math.max(1,Math.round(r.h*H));w=Math.min(w,W-x);h=Math.min(h,H-y);
+    return{x:x/W,y:y/H,w:w/W,h:h/H};
+  }
+  const snapPos=p=>({x:Math.round(p.x*snapCv.width)/snapCv.width,y:Math.round(p.y*snapCv.height)/snapCv.height});
+  function takeSnap(){
+    const vw=video.videoWidth||mainCanvas.width,vh=video.videoHeight||mainCanvas.height;
+    snapCv.width=vw;snapCv.height=vh;snapCtx.drawImage(video,0,0,vw,vh);snapshotImgData=snapCtx.getImageData(0,0,vw,vh);
+    view={x:0,y:0,w:1,h:1};pan=null;drag=null;roiInit={...tempRoi};roiHist=[{...tempRoi}];roiPos=0;updateZoomUI();
+  }
+  function cropSnap(roi){
+    const W=snapCv.width,H=snapCv.height,rx=Math.min(W-1,Math.round(roi.x*W)),ry=Math.min(H-1,Math.round(roi.y*H));
+    return snapCtx.getImageData(rx,ry,Math.max(1,Math.min(W-rx,Math.round(roi.w*W))),Math.max(1,Math.min(H-ry,Math.round(roi.h*H))));
+  }
+  function pushHist(){
+    const t=tempRoi,l=roiHist[roiPos];if(l&&l.x===t.x&&l.y===t.y&&l.w===t.w&&l.h===t.h)return;
+    roiHist=roiHist.slice(0,roiPos+1);roiHist.push({...t});if(roiHist.length>200)roiHist.shift();roiPos=roiHist.length-1;updateZoomUI();
+  }
+  function gotoHist(p){if(p<0||p>=roiHist.length)return;roiPos=p;tempRoi={...roiHist[p]};renderModalCanvas();}
+  function updateZoomUI(){
+    $('zoomLbl').textContent=(1/Math.min(view.w,view.h)).toFixed(1)+'×';
+    const u=$('undoRoiBtn'),r=$('redoRoiBtn');u.disabled=roiPos<=0;r.disabled=roiPos>=roiHist.length-1;u.style.opacity=u.disabled?.45:'';r.style.opacity=r.disabled?.45:'';
+    $('zoomHint').textContent='滾輪縮放 · 右鍵拖曳平移 · 拖曳框的邊或角微調 · 方向鍵微調（Shift＝10 倍）· Ctrl+Z 上一步';
+  }
+  function zoomAt(f,ax,ay){
+    const nw=Math.min(1,Math.max(1/MAXZ,view.w/f)),nh=Math.min(1,Math.max(1/MAXZ,view.h/f));
+    view.x=ax-(ax-view.x)*(nw/view.w);view.y=ay-(ay-view.y)*(nh/view.h);view.w=nw;view.h=nh;clampView();renderModalCanvas();
+  }
+  const viewCenter=()=>({x:view.x+view.w/2,y:view.y+view.h/2});
+  $('zoomInBtn').onclick=()=>{const c=viewCenter();zoomAt(1.5,c.x,c.y);};
+  $('zoomOutBtn').onclick=()=>{const c=viewCenter();zoomAt(1/1.5,c.x,c.y);};
+  $('zoomAllBtn').onclick=()=>{view={x:0,y:0,w:1,h:1};renderModalCanvas();};
+  $('zoomFitBtn').onclick=()=>{
+    if(!(tempRoi.w>0&&tempRoi.h>0)){view={x:0,y:0,w:1,h:1};renderModalCanvas();return;}
+    const px=Math.max(tempRoi.w*.15,8/snapCv.width),py=Math.max(tempRoi.h*.25,8/snapCv.height),x0=Math.max(0,tempRoi.x-px),y0=Math.max(0,tempRoi.y-py);
+    view={x:x0,y:y0,w:Math.min(1,tempRoi.x+tempRoi.w+px)-x0,h:Math.min(1,tempRoi.y+tempRoi.h+py)-y0};clampView();renderModalCanvas();
+  };
+  $('zoom11Btn').onclick=()=>{const box=modalCanvas.parentElement,c=viewCenter();view.w=Math.min(1,box.clientWidth/snapCv.width);view.h=Math.min(1,box.clientHeight/snapCv.height);view.x=c.x-view.w/2;view.y=c.y-view.h/2;clampView();renderModalCanvas();};
+  $('gridChk').onchange=()=>renderModalCanvas();
+  $('undoRoiBtn').onclick=()=>gotoHist(roiPos-1);$('redoRoiBtn').onclick=()=>gotoHist(roiPos+1);
+  $('revertRoiBtn').onclick=()=>{if(roiInit){tempRoi={...roiInit};pushHist();renderModalCanvas();}};
   function renderModalCanvas(){
     if(!snapshotImgData)return;
-    const W=modalCanvas.width,H=modalCanvas.height,rx=Math.round(tempRoi.x*W),ry=Math.round(tempRoi.y*H),rw=Math.round(tempRoi.w*W),rh=Math.round(tempRoi.h*H);
-    modalCtx.putImageData(snapshotImgData,0,0);
-    if(rw>0&&rh>0){const crop=modalCtx.getImageData(rx,ry,rw,rh);
+    const SW=snapCv.width,SH=snapCv.height,vwPx=view.w*SW,vhPx=view.h*SH,sc=Math.min(1400/vwPx,800/vhPx),cw=Math.max(1,Math.round(vwPx*sc)),ch=Math.max(1,Math.round(vhPx*sc));
+    if(modalCanvas.width!==cw||modalCanvas.height!==ch){modalCanvas.width=cw;modalCanvas.height=ch;}
+    modalCtx.imageSmoothingEnabled=sc<1.5;modalCtx.drawImage(snapCv,view.x*SW,view.y*SH,vwPx,vhPx,0,0,cw,ch);
+    if(tempRoi.w>0&&tempRoi.h>0){const crop=cropSnap(tempRoi);
       if(modalMode==='bar')drawBarPreview(crop);else{modalPreviewCanvas._sens=tempSens;tintInk(modalPreviewCanvas,crop);}}
+    if($('gridChk').checked&&sc>=6){
+      modalCtx.strokeStyle='rgba(255,255,255,.18)';modalCtx.lineWidth=1;modalCtx.beginPath();
+      for(let k=Math.ceil(view.x*SW);k<=(view.x+view.w)*SW;k++){const X=Math.round((k-view.x*SW)*sc)+.5;modalCtx.moveTo(X,0);modalCtx.lineTo(X,ch);}
+      for(let k=Math.ceil(view.y*SH);k<=(view.y+view.h)*SH;k++){const Y=Math.round((k-view.y*SH)*sc)+.5;modalCtx.moveTo(0,Y);modalCtx.lineTo(cw,Y);}
+      modalCtx.stroke();
+    }
     const color=modalMode==='bar'&&modalBar?modalBar.color:((rules.find(x=>x.id===activeRuleId)||{}).color||'#f59e0b');
-    modalCtx.strokeStyle=color;modalCtx.lineWidth=Math.max(2,W/640);modalCtx.strokeRect(rx,ry,rw,rh);modalCtx.fillStyle=hexToRgba(color,.22);modalCtx.fillRect(rx,ry,rw,rh);
+    const rx=(tempRoi.x-view.x)/view.w*cw,ry=(tempRoi.y-view.y)/view.h*ch,rw=tempRoi.w/view.w*cw,rh=tempRoi.h/view.h*ch;
+    modalCtx.strokeStyle=color;modalCtx.lineWidth=Math.max(2,cw/640);modalCtx.strokeRect(rx,ry,rw,rh);modalCtx.fillStyle=hexToRgba(color,.22);modalCtx.fillRect(rx,ry,rw,rh);
+    if(tempRoi.w>0&&tempRoi.h>0){   // 邊與角的把手
+      const hs=Math.max(4,cw/230),pts=[[rx,ry],[rx+rw/2,ry],[rx+rw,ry],[rx,ry+rh/2],[rx+rw,ry+rh/2],[rx,ry+rh],[rx+rw/2,ry+rh],[rx+rw,ry+rh]];
+      modalCtx.fillStyle='#fff';modalCtx.strokeStyle=color;modalCtx.lineWidth=1.5;pts.forEach(([X,Y])=>{modalCtx.fillRect(X-hs/2,Y-hs/2,hs,hs);modalCtx.strokeRect(X-hs/2,Y-hs/2,hs,hs);});
+    }
+    updateZoomUI();
   }
   $('sensRange').addEventListener('input',e=>{tempSens=parseInt(e.target.value);$('sensVal').textContent=tempSens;renderModalCanvas();});
-  function nudge(dir,s){
-    const t=tempRoi,bak={...t};
-    ({move_up:()=>t.y-=s,move_down:()=>t.y+=s,move_left:()=>t.x-=s,move_right:()=>t.x+=s,top_expand:()=>{t.y-=s;t.h+=s},top_shrink:()=>{t.y+=s;t.h-=s},
-      bottom_expand:()=>t.h+=s,bottom_shrink:()=>t.h-=s,left_expand:()=>{t.x-=s;t.w+=s},left_shrink:()=>{t.x+=s;t.w-=s},right_expand:()=>t.w+=s,right_shrink:()=>t.w-=s})[dir]?.();
-    if(t.w<.01||t.h<.01||t.x<0||t.y<0||t.x+t.w>1||t.y+t.h>1)Object.assign(t,bak);
-    renderModalCanvas();
+  function curStep(shift){
+    const v=$('stepSel').value,SW=snapCv.width||1600,SH=snapCv.height||900;let sx,sy;
+    if(v[0]==='p'){const n=parseFloat(v.slice(1));sx=n/SW;sy=n/SH;}else sx=sy=parseFloat(v.slice(1));
+    if(shift){sx*=10;sy*=10;}return{sx,sy};
   }
-  document.querySelectorAll('.nudge').forEach(b=>b.addEventListener('click',e=>nudge(e.currentTarget.dataset.dir,parseFloat($('stepSel').value))));
+  function nudge(dir,sx,sy){
+    const t={...tempRoi},bak={...tempRoi},mw=1/snapCv.width,mh=1/snapCv.height;
+    ({move_up:()=>t.y-=sy,move_down:()=>t.y+=sy,move_left:()=>t.x-=sx,move_right:()=>t.x+=sx,top_expand:()=>{t.y-=sy;t.h+=sy},top_shrink:()=>{t.y+=sy;t.h-=sy},
+      bottom_expand:()=>t.h+=sy,bottom_shrink:()=>t.h-=sy,left_expand:()=>{t.x-=sx;t.w+=sx},left_shrink:()=>{t.x+=sx;t.w-=sx},right_expand:()=>t.w+=sx,right_shrink:()=>t.w-=sx})[dir]?.();
+    const e=1e-9;
+    if(t.w<mw-e||t.h<mh-e||t.x<-e||t.y<-e||t.x+t.w>1+e||t.y+t.h>1+e){tempRoi=bak;renderModalCanvas();return;}
+    tempRoi=snapRoi(t);pushHist();renderModalCanvas();
+  }
+  document.querySelectorAll('.nudge').forEach(b=>b.addEventListener('click',e=>{const st=curStep(e.shiftKey);nudge(e.currentTarget.dataset.dir,st.sx,st.sy);}));
   document.addEventListener('keydown',e=>{
     if(cropModal.classList.contains('hidden'))return;
     if(e.key==='Escape'){cropModal.classList.add('hidden');return;}
+    if(e.target.tagName==='SELECT'||(e.target.tagName==='INPUT'&&e.target.type!=='checkbox'))return;
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();gotoHist(e.shiftKey?roiPos+1:roiPos-1);return;}
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();gotoHist(roiPos+1);return;}
     const m={ArrowUp:'move_up',ArrowDown:'move_down',ArrowLeft:'move_left',ArrowRight:'move_right'}[e.key];
-    if(m&&e.target.tagName!=='INPUT'&&e.target.tagName!=='SELECT'){e.preventDefault();nudge(m,parseFloat($('stepSel').value));}
+    if(m){e.preventDefault();const st=curStep(e.shiftKey);nudge(m,st.sx,st.sy);}
   });
-  const modalPos=e=>{const r=modalCanvas.getBoundingClientRect();return{x:Math.max(0,Math.min(modalCanvas.width,(e.clientX-r.left)*modalCanvas.width/r.width)),y:Math.max(0,Math.min(modalCanvas.height,(e.clientY-r.top)*modalCanvas.height/r.height))};};
-  modalCanvas.addEventListener('pointerdown',e=>{isDragging=true;modalCanvas.setPointerCapture(e.pointerId);dragStart=modalPos(e);Object.assign(tempRoi,{x:dragStart.x/modalCanvas.width,y:dragStart.y/modalCanvas.height,w:.001,h:.001});});
+  const modalPos=e=>{const r=modalCanvas.getBoundingClientRect(),u=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),v=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));return{x:view.x+u*view.w,y:view.y+v*view.h};};
+  const CUR={l:'ew-resize',r:'ew-resize',t:'ns-resize',b:'ns-resize',lt:'nwse-resize',rb:'nwse-resize',rt:'nesw-resize',lb:'nesw-resize'};
+  function hitTest(e){   // 游標是否在框的某條邊或某個角附近（8 個螢幕點內）
+    if(!(tempRoi.w>0&&tempRoi.h>0))return '';
+    const r=modalCanvas.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,T=8;
+    const L=(tempRoi.x-view.x)/view.w*r.width,R=(tempRoi.x+tempRoi.w-view.x)/view.w*r.width,Tp=(tempRoi.y-view.y)/view.h*r.height,B=(tempRoi.y+tempRoi.h-view.y)/view.h*r.height;
+    const inY=py>=Tp-T&&py<=B+T,inX=px>=L-T&&px<=R+T,dl=Math.abs(px-L),dr=Math.abs(px-R),dt=Math.abs(py-Tp),db=Math.abs(py-B);
+    let m='';
+    if(inY&&Math.min(dl,dr)<=T)m+=dl<=dr?'l':'r';
+    if(inX&&Math.min(dt,db)<=T)m+=dt<=db?'t':'b';
+    return m.split('').sort().join('')==='bl'?'lb':m.split('').sort().join('')==='lt'?'lt':m.split('').sort().join('')==='br'?'rb':m.split('').sort().join('')==='rt'?'rt':m;
+  }
+  modalCanvas.addEventListener('contextmenu',e=>e.preventDefault());
+  modalCanvas.addEventListener('wheel',e=>{e.preventDefault();const p=modalPos(e);zoomAt(e.deltaY<0?1.25:1/1.25,p.x,p.y);},{passive:false});
+  modalCanvas.addEventListener('pointerdown',e=>{
+    if(e.button===2){pan={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};modalCanvas.setPointerCapture(e.pointerId);modalCanvas.style.cursor='grabbing';e.preventDefault();return;}
+    if(e.button!==0)return;
+    modalCanvas.setPointerCapture(e.pointerId);isDragging=true;
+    const m=hitTest(e);dragStart=modalPos(e);drag={mode:m||'new',orig:{...tempRoi},started:false,px:e.clientX,py:e.clientY};
+  });
   modalCanvas.addEventListener('pointermove',e=>{
-    if(!isDragging)return;const p=modalPos(e);
-    tempRoi={x:Math.min(p.x,dragStart.x)/modalCanvas.width,y:Math.min(p.y,dragStart.y)/modalCanvas.height,w:Math.max(.01,Math.abs(p.x-dragStart.x)/modalCanvas.width),h:Math.max(.01,Math.abs(p.y-dragStart.y)/modalCanvas.height)};
+    if(pan){const r=modalCanvas.getBoundingClientRect();view.x=pan.vx-(e.clientX-pan.x)/r.width*view.w;view.y=pan.vy-(e.clientY-pan.y)/r.height*view.h;clampView();renderModalCanvas();return;}
+    if(!isDragging||!drag){modalCanvas.style.cursor=CUR[hitTest(e)]||'crosshair';return;}
+    const SW=snapCv.width,SH=snapCv.height,p=snapPos(modalPos(e)),mw=2/SW,mh=2/SH;
+    if(drag.mode==='new'){
+      if(!drag.started&&Math.hypot(e.clientX-drag.px,e.clientY-drag.py)<4)return;drag.started=true;
+      const s0=snapPos(dragStart);tempRoi={x:Math.min(p.x,s0.x),y:Math.min(p.y,s0.y),w:Math.max(mw,Math.abs(p.x-s0.x)),h:Math.max(mh,Math.abs(p.y-s0.y))};
+    }else{
+      const o=drag.orig,R=o.x+o.w,B=o.y+o.h,m=drag.mode;let x=o.x,y=o.y,r2=R,b=B;
+      if(m.includes('l'))x=Math.min(p.x,R-mw);if(m.includes('r'))r2=Math.max(p.x,o.x+mw);
+      if(m.includes('t'))y=Math.min(p.y,B-mh);if(m.includes('b'))b=Math.max(p.y,o.y+mh);
+      tempRoi={x,y,w:r2-x,h:b-y};
+    }
     renderModalCanvas();
   });
-  modalCanvas.addEventListener('pointerup',()=>{isDragging=false;});
+  const endDrag=()=>{
+    if(pan){pan=null;modalCanvas.style.cursor='crosshair';}
+    if(isDragging){isDragging=false;if(drag&&(drag.started||drag.mode!=='new'))pushHist();drag=null;}
+  };
+  modalCanvas.addEventListener('pointerup',endDrag);modalCanvas.addEventListener('pointercancel',endDrag);
   $('cancelCropBtn').onclick=()=>cropModal.classList.add('hidden');
-  $('resetCropBtn').onclick=()=>{tempRoi={x:0,y:0,w:0,h:0};renderModalCanvas();};
+  $('resetCropBtn').onclick=()=>{tempRoi={x:0,y:0,w:0,h:0};view={x:0,y:0,w:1,h:1};pushHist();renderModalCanvas();};
   function resetRuleState(r){r.currentAlerts=0;r.lastMatchTime=0;r.isMuted=false;r.isClearLocked=false;r.holdStartTime=0;r._confirmed=false;r._missAt=0;r.clearStartTime=0;r._hist=[];r._tc={};r.inkSens=tempSens;}
-  $('saveRoiOnlyBtn').onclick=()=>{const r=rules.find(x=>x.id===activeRuleId);if(r){r.roi={...tempRoi};resetRuleState(r);}cropModal.classList.add('hidden');renderRulesUI();};
+  $('saveRoiOnlyBtn').onclick=()=>{tempRoi=snapRoi(tempRoi);const r=rules.find(x=>x.id===activeRuleId);if(r){r.roi={...tempRoi};resetRuleState(r);}cropModal.classList.add('hidden');renderRulesUI();};
   $('saveCropBtn').onclick=()=>{
     if(modalMode==='bar'){saveBarRoi();return;}
+    tempRoi=snapRoi(tempRoi);
     const r=rules.find(x=>x.id===activeRuleId);
-    if(r){const W=modalCanvas.width,H=modalCanvas.height,rx=Math.round(tempRoi.x*W),ry=Math.round(tempRoi.y*H),rw=Math.round(tempRoi.w*W),rh=Math.round(tempRoi.h*H);
-      if(rw>0&&rh>0){r.roi={...tempRoi};modalCtx.putImageData(snapshotImgData,0,0);r.targetImageData=modalCtx.getImageData(rx,ry,rw,rh);resetRuleState(r);}}
+    if(r&&tempRoi.w>0&&tempRoi.h>0){r.roi={...tempRoi};r.targetImageData=cropSnap(tempRoi);resetRuleState(r);}
     cropModal.classList.add('hidden');renderRulesUI();
   };
 
@@ -710,11 +831,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const b64ToImg=b64=>new Promise(res=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));};i.src=b64;});
   $('exportZipBtn').onclick=async()=>{
     saveCurrentGroup();
+    const nmIn=prompt('設定包名稱（會放進檔名，例如：海圖、新手用）：',packName);if(nmIn===null)return;
+    packName=(nmIn.trim()||'我的設定').slice(0,30);packRev++;
     const zip=new JSZip(),af=zip.folder('audio'),g0=groups[0];
     // config.json：第一個群組的規則（維持陣列格式，舊版程式也讀得開）；完整群組資料在 groups.json
     zip.file('config.json',JSON.stringify(g0.rules.map(ruleToJson),null,2));
-    zip.file('meta.json',JSON.stringify({app:'RF4 提示小助手',appVersion:APP_VERSION,schema:SCHEMA,exportedAt:new Date().toISOString()},null,2));
-    const gj={activeGroupId,master:masterVol,rodGuard:{enabled:rodGuard.enabled,roi:rodGuard.roi,roiSet:rodGuard.roiSet,tplBase64:rodGuard.tpl?imgToCanvas(rodGuard.tpl).toDataURL():null},groups:[]};
+    zip.file('meta.json',JSON.stringify({app:'RF4 提示小助手',appVersion:APP_VERSION,schema:SCHEMA,packName,packRev,exportedAt:new Date().toISOString()},null,2));
+    const gj={activeGroupId,master:masterVol,perf:{...perf},rodGuard:{enabled:rodGuard.enabled,roi:rodGuard.roi,roiSet:rodGuard.roiSet,tplBase64:rodGuard.tpl?imgToCanvas(rodGuard.tpl).toDataURL():null},groups:[]};
     for(const g of groups){
       gj.groups.push({id:g.id,name:g.name,railOrder:normRail(g.railOrder),rules:g.rules.map(ruleToJson),bars:g.bars.map(barToJson)});
       for(const r of g.rules)if(r.customAudioUrl&&r.customAudioFileName){const bl=await audioBlob(r.customAudioUrl);if(bl){af.file(`g${g.id}_r${r.id}__${r.customAudioFileName}`,bl);if(g===g0)af.file(r.customAudioFileName,bl);}}
@@ -722,9 +845,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     zip.file('groups.json',JSON.stringify(gj,null,2));
     const url=URL.createObjectURL(await zip.generateAsync({type:'blob'})),a=document.createElement('a');
-    a.href=url;a.download=`RF4_Alert_Config_${new Date().toISOString().slice(0,10)}.zip`;a.click();URL.revokeObjectURL(url);
+    a.href=url;a.download=`RF4_${packName.replace(/[\\/:*?"<>|\s]+/g,'_')}_r${packRev}_v${APP_VERSION.replace(/\s+/g,'-')}_${new Date().toISOString().slice(0,10)}.zip`;a.click();URL.revokeObjectURL(url);
   };
-  const RULE_KEYS=['id','name','roi','threshold','soundType','customAudioFileName','volume','color','enabled','cooldown','maxAlerts','neverMute','resetsTargets','resetBySources','persistTime','lockEnabled','clearEnabled','clearTime','inkSens'];
+  const RULE_KEYS=['id','name','roi','threshold','soundType','customAudioFileName','volume','color','enabled','cooldown','maxAlerts','neverMute','resetsTargets','resetBySources','persistTime','lockEnabled','clearEnabled','clearTime','inkSens','stopMode','stopFadeSec','stopGone','stopReset','stopRod'];
+  let packName='我的設定',packRev=0,legacyRod=null;
   const ruleToJson=r=>{const o={};RULE_KEYS.forEach(k=>o[k]=r[k]);o.targetImageBase64=r.targetImageData?imgToCanvas(r.targetImageData).toDataURL():null;return o;};
   const barToJson=b=>{const o={};BAR_KEYS.forEach(k=>o[k]=b[k]);return o;};
   async function audioBlob(url){try{return await(await fetch(url)).blob();}catch(e){return null;}}
@@ -750,7 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const it=(arr||[]).find(x=>x&&x.key===def.key);
       if(!it){out.push(makeBar(def));continue;}
       const url=it.customAudioFileName?await readAudio(z,audioPath(it)):null;
-      out.push(fixBar(makeBar({...def,...it,customAudioUrl:url,roi:{...def.roi,...(it.roi||{})},roiSet:it.roiSet===undefined?!!it.roi:!!it.roiSet})));
+      out.push(fixBar(makeBar({...def,...(it.rodRelease===undefined&&legacyRod!=null?{rodRelease:legacyRod}:{}),...it,customAudioUrl:url,roi:{...def.roi,...(it.roi||{})},roiSet:it.roiSet===undefined?!!it.roi:!!it.roiSet})));
     }
     return out;
   }
@@ -763,6 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if(gf){
         const gj=JSON.parse(await gf.async('text'));
         if(typeof gj.master==='number')master=gj.master;
+        if(gj.perf){Object.assign(perf,cleanPerf(gj.perf));savePerf();syncPerfUI();const lr=parseFloat(gj.perf.rodRelease);legacyRod=isNaN(lr)?null:Math.min(2,Math.max(.3,lr));}
         if(gj.rodGuard&&gj.rodGuard.roi){const q=gj.rodGuard;rodGuard.roi={...rodGuard.roi,...q.roi};rodGuard.roiSet=!!q.roiSet;rodGuard.enabled=q.enabled!==false;rodGuard.held=false;rodGuard._seen=0;rodGuard.tpl=q.tplBase64?await b64ToImg(q.tplBase64):null;rodGuard._src=null;rodGuard._hist=[];rodGuard.score=null;rodGuard._streak=0;}
         for(const gi of gj.groups||[]){
           const gid=parseInt(gi.id)||next.length+1,rs=[];
@@ -786,7 +911,8 @@ document.addEventListener('DOMContentLoaded', () => {
       groups[0].bars.forEach(syncBarShared);   // 框選位置各群組共用：以第一個群組為準
       if(master!=null){masterVol=clampN(master,0,100,100);syncMaster();}
       const cur=groups.find(g=>g.id===active)||groups[0];activeGroupId=cur.id;loadGroup(cur);renderAll();
-      const ver=meta?`（來自 v${meta.appVersion||'?'}）`:'（來自舊版，未標示版本）';
+      if(meta&&meta.packName){packName=String(meta.packName);packRev=parseInt(meta.packRev)||0;}
+      const ver=meta?`（${meta.packName?`「${meta.packName}」第 ${meta.packRev||'?'} 版，`:''}來自 v${meta.appVersion||'?'}）`:'（來自舊版，未標示版本）';
       alert('設定與音效包匯入成功！'+ver+`\n共 ${groups.length} 個群組。`+(meta&&meta.schema>SCHEMA?'\n\n注意：這份設定來自較新的版本，部分新功能設定會被忽略。':''));
     }catch(err){alert('匯入失敗，壓縮檔格式可能有誤：'+err.message);}
     e.target.value='';
@@ -813,7 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
       worker.onmessage=()=>detectTick();worker.postMessage('start');
     }catch(e){fallbackTimer=setInterval(detectTick,60);}   // Worker 不可用時退回一般計時器
   }
-  let fallbackTimer=null;
+  let fallbackTimer=null,tickMs=0;
   function frameCheck(now){   // 畫面是否仍在變動（遊戲被最小化時，擷取畫面會完全靜止）
     if(video.readyState<2)return;
     fx.drawImage(video,0,0,32,18);const d=fx.getImageData(0,0,32,18).data;let s=0;
@@ -822,13 +948,16 @@ document.addEventListener('DOMContentLoaded', () => {
     frozen=now-lastChange>8000;
   }
   function updateLiveChip(now){
-    const c=$('liveChip');let t,cls,ico='';
+    const c=$('liveChip');c.title='偵測一輪約 '+tickMs.toFixed(1)+' 毫秒（偵測每 50 毫秒跑一次；超過 40 毫秒代表電腦吃緊）';let t,cls,ico='';
     if(!isCapturing){t='未擷取';cls='bg-white/80 text-[#7f74b4]';}
     else if(frozen){t='⚠ 畫面 8 秒沒有變化（遊戲可能被最小化或暫停）';cls='bg-[#fff1cc] text-[#a86b00] animate-pulse';ico='⚠️ ';}
     else if(now<gapNotice.until){t=`偵測曾中斷 ${Math.round(gapNotice.sec)} 秒，已恢復`;cls='bg-[#ffe3ef] text-[#d9467e]';ico='⚠️ ';}
     else if(document.hidden){t='背景運行中';cls='bg-[#e0f2fe] text-[#0284c7]';ico='🟢 ';}
     else{t='擷取中 ✦';cls='bg-[#d7f7ec] text-[#14906e]';ico='🟢 ';}
     c.textContent=t;c.className='chip '+cls;document.title=ico+BASE_TITLE;
+    {if(updateLiveChip._t==null){updateLiveChip._t=now;updateLiveChip._c=vfCount;}const dt=now-updateLiveChip._t;if(dt>=400){const f=Math.round((vfCount-(updateLiveChip._c||0))*1000/dt);updateLiveChip._t=now;updateLiveChip._c=vfCount;updateLiveChip._f=f;}
+     const txt=isCapturing?`偵測 ${tickMs.toFixed(0)}ms · 畫面 ${updateLiveChip._f==null?'--':updateLiveChip._f}fps`:'',rp=$('railPerf'),pl=$('perfLive');
+     if(rp){rp.textContent=txt;rp.style.color=tickMs>40?'#d97706':'';}if(pl)pl.textContent=txt;}
   }
   document.addEventListener('visibilitychange',()=>updateLiveChip(Date.now()));
 
@@ -836,12 +965,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!isCapturing)return;
     const now=Date.now();
     if(lastTick&&now-lastTick>2000)gapNotice={until:now+15000,sec:(now-lastTick)/1000};   // 偵測中斷過
-    lastTick=now;tickBars(now);
+    lastTick=now;
+    if(syncOn()&&now-lastChange<1000&&performance.now()-lastFrameAt>700)frameSeq++;   // 安全網：通知失靈時退回每輪都比對
+    tickBars(now);
     if(video.readyState>=2){
       rules.forEach(rule=>{
         if(!rule.enabled){setState(rule,'已停用',ST.off);return;}
-        if(rule.roi.w<=0||rule.roi.h<=0||now-(rule._lastEval||0)<60)return;
-        rule._lastEval=now;const sim=evaluateRule(rule);rule.currentSim=sim;
+        if(rule.roi.w<=0||rule.roi.h<=0||now-(rule._lastEval||0)<DET_GAP[perf.detectHz])return;
+        rule._lastEval=now;const sim=fresh(rule)?(rule._seq=frameSeq,evaluateRule(rule)):(rule.currentSim||0);rule.currentSim=sim;
         const s=$('sim_'+rule.id),b=$('bar_'+rule.id),m=$('meter_'+rule.id);
         if(s)s.textContent=sim.toFixed(1)+'%';if(b)b.style.width=sim.toFixed(1)+'%';
         const hit=sim>=rule.threshold;if(m)m.classList.toggle('hit',hit);
@@ -896,7 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }else{
       if(!rule._missAt)rule._missAt=now;
-      if(now-rule._missAt>300){rule.holdStartTime=0;rule._confirmed=false;}   // 短暫掉幀（0.3 秒內）不中斷持續判定
+      if(now-rule._missAt>300){if(rule._confirmed)stopSound(rule,'gone');rule.holdStartTime=0;rule._confirmed=false;}   // 短暫掉幀（0.3 秒內）不中斷持續判定
       if(rule.isClearLocked&&rule.clearEnabled){
         if(!rule.clearStartTime)rule.clearStartTime=now;
         const el=(now-rule.clearStartTime)/1000,req=Math.max(.1,rule.clearTime||3);
@@ -908,8 +1039,31 @@ document.addEventListener('DOMContentLoaded', () => {
     setState(rule,label,cls);
   }
 
-  function renderLoop(){
+  /* ---------- 效能設定：預設值＝舊版行為（預覽不限速、每秒判斷 10 次、不跟畫面同步、拿竿放下等 2 秒） ---------- */
+  const perf={previewFps:60,detectHz:10,sync:false};
+  const DET_GAP={20:40,10:60,5:160};
+  const cleanPerf=o=>({previewFps:[0,5,15,30,60].includes(+o.previewFps)?+o.previewFps:60,detectHz:[5,10,20].includes(+o.detectHz)?+o.detectHz:10,sync:!!o.sync});
+  try{const q=JSON.parse(localStorage.getItem('rf4perf')||'null');if(q)Object.assign(perf,cleanPerf(q));}catch(e){}
+  const savePerf=()=>{try{localStorage.setItem('rf4perf',JSON.stringify(perf));}catch(e){}};
+  function syncPerfUI(){$('perfPreview').value=String(perf.previewFps);$('perfDetect').value=String(perf.detectHz);$('perfSync').checked=perf.sync;}
+  $('perfPreview').onchange=e=>{perf.previewFps=+e.target.value;previewOffDrawn=false;savePerf();};
+  $('perfDetect').onchange=e=>{perf.detectHz=+e.target.value;savePerf();};
+  $('perfSync').onchange=e=>{perf.sync=e.target.checked;savePerf();};
+  // 畫面更新計數：每來一張新畫面 +1。「跟著遊戲畫面」開啟時，同一張畫面不重複做最耗運算的比對
+  let frameSeq=0,lastFrameAt=0,vfCount=0;
+  if(video.requestVideoFrameCallback){const vcb=()=>{frameSeq++;lastFrameAt=performance.now();vfCount++;video.requestVideoFrameCallback(vcb);};video.requestVideoFrameCallback(vcb);}
+  const syncOn=()=>perf.sync&&!!video.requestVideoFrameCallback&&!document.hidden;
+  const fresh=x=>!syncOn()||x._seq!==frameSeq;
+  let lastRender=0,previewOffDrawn=false;
+  function renderLoop(ts){
     if(!isCapturing)return;
+    if(perf.previewFps===0){   // 預覽關閉：偵測照常，只是不畫畫面
+      if(!previewOffDrawn){previewOffDrawn=true;ctx.fillStyle='#1a1630';ctx.fillRect(0,0,mainCanvas.width,mainCanvas.height);ctx.fillStyle='#cfc6ff';ctx.font=`bold ${Math.round(mainCanvas.width/32)}px sans-serif`;ctx.textAlign='center';ctx.fillText('預覽已關閉（偵測照常運作）',mainCanvas.width/2,mainCanvas.height/2);}
+      requestAnimationFrame(renderLoop);return;
+    }
+    previewOffDrawn=false;
+    if(ts-lastRender<1000/perf.previewFps-4){requestAnimationFrame(renderLoop);return;}
+    lastRender=ts;
     if(video.readyState>=2){
       ctx.drawImage(video,0,0,mainCanvas.width,mainCanvas.height);drawBars();
       if(cropModal.classList.contains('hidden')&&showOverlayToggle.checked){
@@ -932,23 +1086,55 @@ document.addEventListener('DOMContentLoaded', () => {
   const isPlaying=x=>!!(x._audio&&!x._audio.paused&&!x._audio.ended);
   function liveVol(x){if(isPlaying(x))x._audio.volume=effVol(x);}       // 拉音量條時，正在播的音效即時跟著變
   function previewOnRelease(x){if(!isPlaying(x))playSound(x);}          // 放開音量條時自動試聽一下（已在播就不重播）
+  function stopBoxHTML(x,kind){
+    const off=x.stopMode==='none';
+    return `<div class="soft p-2.5 space-y-1.5 text-xs">
+      <div class="flex items-center justify-between gap-2"><span class="font-bold text-[#5b46b8]" title="條件消失時，要不要把還在播的音效收掉">條件結束時音效</span>
+        <select class="stop-mode field !py-0.5"><option value="none" ${x.stopMode==='none'?'selected':''}>播完為止</option><option value="fade" ${x.stopMode==='fade'?'selected':''}>淡出停止</option><option value="cut" ${x.stopMode==='cut'?'selected':''}>立即停止</option></select></div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 ${off?'opacity-45':''}">
+        <label class="flex items-center gap-1 ${x.stopMode==='cut'?'opacity-45':''}"><span class="lbl">淡出</span><input type="number" min="0.1" max="5" step="0.1" value="${x.stopFadeSec}" class="stop-sec field !py-0.5 !px-1 text-center w-14 font-bold" ${off||x.stopMode==='cut'?'disabled':''}><span class="lbl">秒</span></label>
+        <label class="flex items-center gap-1"><input type="checkbox" class="stop-gone" ${x.stopGone?'checked':''} ${off?'disabled':''}>條件消失時</label>
+        ${kind==='rule'?`<label class="flex items-center gap-1"><input type="checkbox" class="stop-reset" ${x.stopReset?'checked':''} ${off?'disabled':''}>被連動重置時</label>`:`<label class="flex items-center gap-1"><input type="checkbox" class="stop-rod" ${x.stopRod?'checked':''} ${off?'disabled':''}>拿竿暫停時</label>`}
+      </div></div>`;
+  }
+  function stopHandler(t,x){
+    if(t.classList.contains('stop-mode'))x.stopMode=t.value;
+    else if(t.classList.contains('stop-sec'))x.stopFadeSec=Math.min(5,Math.max(.1,parseFloat(t.value)||.6));
+    else if(t.classList.contains('stop-gone'))x.stopGone=t.checked;
+    else if(t.classList.contains('stop-reset'))x.stopReset=t.checked;
+    else if(t.classList.contains('stop-rod'))x.stopRod=t.checked;
+    else return false;
+    return true;
+  }
   function playSound(rule){
     if(rule.soundType==='none')return null;
     const vol=effVol(rule);   // 實際音量＝主音量×個別音量
     if(rule.soundType==='custom'&&rule.customAudioUrl){
-      if(rule._audio)rule._audio.pause();
+      clearInterval(rule._fade);if(rule._audio)rule._audio.pause();
       const a=new Audio(rule.customAudioUrl);a.volume=vol;rule._audio=a;
       a.play().catch(()=>a.dispatchEvent(new Event('error')));
       return a;
     }
     try{
       audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();audioCtx.resume?.();
-      const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;o.connect(g);g.connect(audioCtx.destination);g.gain.setValueAtTime(.3*vol,t);
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;rule._synth={o,g};o.connect(g);g.connect(audioCtx.destination);g.gain.setValueAtTime(.3*vol,t);
       if(rule.soundType==='beep1'){o.frequency.setValueAtTime(600,t);o.start(t);o.stop(t+.3);}
       else if(rule.soundType==='beep2'){o.frequency.setValueAtTime(1000,t);o.frequency.setValueAtTime(1500,t+.1);o.start(t);o.stop(t+.3);}
       else{o.type='sawtooth';o.frequency.setValueAtTime(800,t);o.frequency.linearRampToValueAtTime(1600,t+.2);g.gain.setValueAtTime(.2*vol,t);o.start(t);o.stop(t+.25);}
     }catch(e){}
     return null;
+  }
+  // 條件結束時停止音效。why：gone＝條件消失／reset＝被連動重置／rod＝拿竿暫停；是否停止、淡出多久由每個音效自己設定
+  function stopSound(x,why){
+    if(x.stopMode!=='fade'&&x.stopMode!=='cut')return;
+    if((why==='gone'&&!x.stopGone)||(why==='reset'&&!x.stopReset)||(why==='rod'&&!x.stopRod))return;
+    const dur=x.stopMode==='cut'?0:Math.max(.1,x.stopFadeSec||.6)*1000,a=x._audio;
+    if(a&&!a.paused&&!a.ended){
+      clearInterval(x._fade);const done=()=>{try{a.pause();}catch(e){}if(a.onended)a.onended();};
+      if(!dur)done();
+      else{const t0=performance.now(),v0=a.volume;x._fade=setInterval(()=>{const k=1-(performance.now()-t0)/dur;if(k<=0){clearInterval(x._fade);done();}else a.volume=v0*k;},30);}
+    }
+    const sy=x._synth;if(sy&&audioCtx){try{const t=audioCtx.currentTime,d=Math.max(.03,dur/1000);sy.g.gain.cancelScheduledValues(t);sy.g.gain.setValueAtTime(sy.g.gain.value,t);sy.g.gain.linearRampToValueAtTime(0,t+d);sy.o.stop(t+d+.02);}catch(e){}x._synth=null;}
   }
   function triggerAlert(rule,silent){
     rule.isCoolingDown=true;refreshStatus(rule);
@@ -965,8 +1151,8 @@ document.addEventListener('DOMContentLoaded', () => {
     {key:'stamina',name:'體力條（挖蚯蚓）',short:'體力',icon:'⚡',rodPause:true,colorReq:'green',dir:'above',threshold:70,roi:{x:.117,y:.857,w:.095,h:.02},color:'#10b981',soundType:'beep2'},
     {key:'satiety',name:'飽食條（吃東西）',short:'飽食',icon:'🍴',dir:'below',threshold:30,roi:{x:.117,y:.893,w:.095,h:.02},color:'#f59e0b',soundType:'beep1'}
   ];
-  const BAR_KEYS=['key','name','roi','dir','threshold','enabled','repeatSec','soundType','customAudioFileName','volume','color','colorMin','roiSet','rodPause','colorReq'];
-  const makeBar=o=>({key:'',name:'',icon:'',roi:{x:.1,y:.85,w:.1,h:.02},dir:'above',threshold:50,enabled:false,repeatSec:5,soundType:'beep2',customAudioUrl:null,customAudioFileName:null,volume:100,color:'#10b981',colorMin:40,roiSet:false,rodPause:false,colorReq:'any',currentColor:null,muted:false,short:'',
+  const BAR_KEYS=['key','name','roi','dir','threshold','enabled','repeatSec','soundType','customAudioFileName','volume','color','colorMin','roiSet','rodPause','colorReq','rodRelease','stopMode','stopFadeSec','stopGone','stopReset','stopRod'];
+  const makeBar=o=>({key:'',name:'',icon:'',roi:{x:.1,y:.85,w:.1,h:.02},dir:'above',threshold:50,enabled:false,repeatSec:5,soundType:'beep2',rodRelease:2,stopMode:'none',stopFadeSec:.6,stopGone:true,stopReset:true,stopRod:true,customAudioUrl:null,customAudioFileName:null,volume:100,color:'#10b981',colorMin:40,roiSet:false,rodPause:false,colorReq:'any',currentColor:null,muted:false,short:'',
     currentPct:-1,_hist:[],_active:false,_lastAlert:0,_lastEval:0,_open:false,_audio:null,...o});
   const clampN=(v,a,b,d)=>{v=parseFloat(v);return isNaN(v)?d:Math.min(b,Math.max(a,v));};
   function fixBar(b){
@@ -1027,11 +1213,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const need=bars.some(x=>x.rodPause&&x.enabled);
     if(!rodGuard.roiSet||!need){rodGuard.held=false;rodStatRefresh();return;}
     if(now-rodGuard._lastEval<100)return;rodGuard._lastEval=now;
+    const holdMs=Math.round(1000*Math.max(.3,...bars.filter(x=>x.rodPause&&x.enabled).map(x=>x.rodRelease||2)));   // 全域狀態取各條中最長的，各條再依自己的秒數判斷
+    if(!fresh(rodGuard)){rodGuard.held=now-rodGuard._seen<holdMs;rodStatRefresh();return;}
+    rodGuard._seq=frameSeq;
     const r=evalRodAt();
     rodGuard.score=r.score;
     if(r.unclear){if(rodGuard.held)rodGuard._seen=now;}
     else if(r.present){rodGuard._streak++;if(rodGuard._streak>=2)rodGuard._seen=now;}else rodGuard._streak=0;   // 連兩次看到才算
-    rodGuard.held=now-rodGuard._seen<2000;                                                              // 消失超過 2 秒才算放下竿
+    rodGuard.held=now-rodGuard._seen<holdMs;                                                              // 消失超過 2 秒才算放下竿
     rodStatRefresh();
   }
   const barsContainer=$('barsContainer');
@@ -1083,8 +1272,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function setBarState(b,txt,cls){b._label=txt;const e=$('bstate_'+b.key);if(e&&(e.textContent!==txt||e.className!=='chip '+cls)){e.textContent=txt;e.className='chip '+cls;}}
   // 條件成立期間每 N 秒重複提醒，條件解除即停；遲滯 2% 避免在門檻邊緣忽響忽停；找不到條就暫停（寧可漏響不誤響）
   function handleBar(b,pct,found,now){
-    let label,cls;
-    if(b.rodPause&&rodGuard.roiSet&&rodGuard.held){   // 拿著竿子：暫停提醒
+    let label,cls;const wasActive=b._active;
+    if(b.rodPause&&rodGuard.roiSet&&rodGuard.held&&Date.now()-rodGuard._seen<Math.round((b.rodRelease||2)*1000)){   // 拿著竿子：暫停提醒
+      if(wasActive)stopSound(b,'rod');
       b._active=false;b._lastAlert=0;
       setBarState(b,b.enabled?'拿竿中 · 暫停提醒':'已停用 · 拿竿中',WARN);
       const pl0=$('pill_'+b.key);if(pl0){pl0.classList.remove('pill-alarm');pl0.title='拿竿中，暫停提醒';}
@@ -1103,16 +1293,19 @@ document.addEventListener('DOMContentLoaded', () => {
         label=`${p}% · 提醒中`+(b.muted?'（已靜音）':'');cls=ALARM;
       }else{b._lastAlert=0;label=num&&!colorOk?`${p}% · 顏色不符`:`${p}% · 未達條件`;cls=ST.idle;}
     }
+    if(wasActive&&!b._active)stopSound(b,'gone');
     setBarState(b,label,cls);
     const pl=$('pill_'+b.key);if(pl){pl.classList.toggle('pill-alarm',b._active);pl.title=label;}
     const m=$('bmeter_'+b.key);if(m)m.classList.toggle('hit',b._active);
   }
+  const detectTickRaw=detectTick;
+  detectTick=function(){const t0=performance.now();detectTickRaw();tickMs=tickMs?tickMs*.9+(performance.now()-t0)*.1:performance.now()-t0;};
   function tickBars(now){
     if(!isCapturing||video.readyState<2)return;
     tickRod(now);
     bars.forEach(b=>{
-      if(b.roi.w<=0||b.roi.h<=0||now-b._lastEval<60)return;
-      b._lastEval=now;const v=evalBar(b),found=v>=0;b.currentPct=v;
+      if(b.roi.w<=0||b.roi.h<=0||now-b._lastEval<DET_GAP[perf.detectHz])return;
+      b._lastEval=now;const v=fresh(b)?(b._seq=frameSeq,evalBar(b)):b.currentPct,found=v>=0;b.currentPct=v;
       const p=$('bpct_'+b.key),f=$('bbar_'+b.key);
       if(p)p.textContent=found?Math.round(v)+'%':'--';
       const pp=$('pillpct_'+b.key);if(pp)pp.textContent=found?Math.round(v)+'%':(b.roiSet?'--':'未框選');
@@ -1179,9 +1372,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="flex items-center gap-2"><span class="lbl shrink-0">音量</span><input type="range" min="0" max="100" value="${b.volume}" class="bar-vol flex-1" aria-label="${esc(b.name)}音量"><b id="bvol_${k}" class="w-10 text-right text-[#8b6cff]">${b.volume}%</b></div>
           ${k==='stamina'?`<div class="soft p-2.5 space-y-2">
             <div class="flex items-center justify-between font-bold text-[#5b46b8]"><span>🎣 拿竿時不提醒</span><input type="checkbox" class="sw bar-rodpause" ${b.rodPause?'checked':''} aria-label="拿竿時不提醒"></div>
+            <div class="flex items-center gap-2 ${b.rodPause?'':'opacity-45'}"><span class="lbl shrink-0" title="收起魚竿後，等多久才當作沒拿竿、恢復提醒">收竿後等待</span><input type="range" min="0.3" max="2" step="0.1" value="${b.rodRelease||2}" class="bar-rodrel flex-1" ${b.rodPause?'':'disabled'} aria-label="收竿後等待秒數"><b id="rodrelval_${k}" class="w-12 text-right text-[#8b6cff]">${(b.rodRelease||2).toFixed(1)} 秒</b></div>
             <div class="flex items-center justify-between gap-2"><button class="rod-frame btn btn-sm btn-ghost" title="拿著魚竿時，框住畫面下方那排六個圓形圖示">框選拿竿圖示</button><span id="rodstat_${k}" class="lbl text-[11px]">${rodStatText()}</span></div>
             <p class="lbl text-[11px] leading-snug">拿著魚竿時畫面下方會出現竿子資訊列，有出現就不提醒（拿竿都在釣魚，不用挖蚯蚓）；拿鏟子、空手沒有資訊列，照常提醒。框選時只框左邊文字那一小段。門檻、方向照上面自訂，不限制 73%。位置所有群組共用。</p>
           </div>`:''}
+          ${stopBoxHTML(b,'bar')}
           <p class="lbl text-[11px] leading-snug">框選位置所有群組共用；開關、門檻、音效、音量只套用在目前群組「${esc(curGroup().name)}」；實際音量＝主音量 × 這裡的音量。找不到條時會暫停提醒，避免 HUD 淡出被誤判成「空的」。</p>
         </div>`;
     barsContainer.appendChild(card);
@@ -1214,6 +1409,7 @@ document.addEventListener('DOMContentLoaded', () => {
   barsContainer.addEventListener('input',e=>{
     const t=e.target,b=barOf(t);if(!b)return;
     if(t.classList.contains('bar-vol')){b.volume=parseInt(t.value);$('bvol_'+b.key).textContent=b.volume+'%';liveVol(b);}
+    else if(t.classList.contains('bar-rodrel')){b.rodRelease=Math.min(2,Math.max(.3,parseFloat(t.value)||2));$('rodrelval_'+b.key).textContent=b.rodRelease.toFixed(1)+' 秒';}
     else if(t.classList.contains('bar-repeat')){const v=parseFloat(t.value);if(!isNaN(v)){b.repeatSec=Math.max(.5,v);$('bcond_'+b.key).textContent=condText(b);}}
   });
   barsContainer.addEventListener('change',e=>{
@@ -1222,11 +1418,13 @@ document.addEventListener('DOMContentLoaded', () => {
     else if(t.classList.contains('bar-dir')){b.dir=t.value;b._active=false;b._lastAlert=0;b._open=b._open;renderBarsUI();}
     else if(t.classList.contains('bar-colorreq')){b.colorReq=t.value;b._active=false;b._lastAlert=0;$('bcond_'+b.key).textContent=condText(b);}
     else if(t.classList.contains('bar-vol'))previewOnRelease(b);
+    else if(stopHandler(t,b)){b._open=true;renderBarsUI();}
     else if(t.classList.contains('bar-rodpause')){b.rodPause=t.checked;b._active=false;b._lastAlert=0;renderBarsUI();}
     else if(t.classList.contains('bar-sound')){b.soundType=t.value;b._open=true;renderBarsUI();}
     else if(t.classList.contains('bar-audio')){const f=t.files[0];if(f){b.customAudioUrl=URL.createObjectURL(f);b.customAudioFileName=f.name;b._open=true;renderBarsUI();}}
   });
 
+  syncPerfUI();
   // 主音量
   function syncMaster(){$('masterVol').value=masterVol;$('masterVolVal').textContent=masterVol+'%';}
   $('masterVol').addEventListener('input',e=>{masterVol=parseInt(e.target.value);$('masterVolVal').textContent=masterVol+'%';});
@@ -1272,9 +1470,10 @@ document.addEventListener('DOMContentLoaded', () => {
     $('barPctLive').textContent=r.found?Math.round(r.pct)+'%':'找不到條';
   }
   function saveBarRoi(){
+    tempRoi=snapRoi(tempRoi);
     if(modalBar&&modalBar.kind==='rod'&&tempRoi.w>0&&tempRoi.h>0){rodGuard.roi={...tempRoi};rodGuard.roiSet=true;
-      {const W=modalCanvas.width,H=modalCanvas.height,rx=Math.round(tempRoi.x*W),ry=Math.round(tempRoi.y*H),rw=Math.round(tempRoi.w*W),rh=Math.round(tempRoi.h*H);
-       if(snapshotImgData&&rw>4&&rh>4){modalCtx.putImageData(snapshotImgData,0,0);const crop=modalCtx.getImageData(rx,ry,rw,rh);rodGuard.tpl=buildRodTpl(crop).valid?crop:null;rodGuard._src=null;rodGuard._hist=[];rodGuard.score=null;}}
+      {const crop=snapshotImgData&&cropSnap(tempRoi);
+       if(crop&&crop.width>4&&crop.height>4){rodGuard.tpl=buildRodTpl(crop).valid?crop:null;rodGuard._src=null;rodGuard._hist=[];rodGuard.score=null;}}
       rodGuard.held=false;rodGuard._streak=0;rodGuard._seen=0;barSaved=true;renderQuickBar();}
     else if(modalBar&&tempRoi.w>0&&tempRoi.h>0){syncBarRoi(modalBar.key,tempRoi,tempColorMin,true);barSaved=true;}
     cropModal.classList.add('hidden');renderBarsUI();   // 隱藏後由下面的 MutationObserver 接手（續框下一條／回到設定視窗）
@@ -1386,8 +1585,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!isCapturing){alert('請先點擊頂部的「開啟畫面分享」並選擇遊戲視窗！');return;}
     modalMode='bar';modalBar=b;setModalMode();tempRoi={...b.roi};tempColorMin=b.colorMin;
     $('barSensRange').value=tempColorMin;$('barSensVal').textContent=tempColorMin;
-    modalCanvas.width=video.videoWidth||mainCanvas.width;modalCanvas.height=video.videoHeight||mainCanvas.height;
-    modalCtx.drawImage(video,0,0,modalCanvas.width,modalCanvas.height);snapshotImgData=modalCtx.getImageData(0,0,modalCanvas.width,modalCanvas.height);
+    takeSnap();
     cropModal.classList.remove('hidden');renderModalCanvas();
   }
   // 框選視窗關閉後：引導中就續框下一條；從設定視窗進來的就回到設定視窗
