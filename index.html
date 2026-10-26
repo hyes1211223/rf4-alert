@@ -86,6 +86,10 @@ details[open]>summary .arr{transform:rotate(180deg)}
 .rules-compact [data-card]>:not(:first-child){display:none!important}
 .rules-compact [data-card]>*{margin:0!important}
 .rules-compact [data-card]{padding:.55rem .8rem!important}
+[data-card][data-fold]>:not(:first-child){display:none!important}
+[data-card][data-fold]>*{margin:0!important}
+[data-card][data-fold]{padding:.55rem .8rem!important}
+.card-fold{font-size:13px;color:#8b6cff}
 .sort-ph{border:2px dashed #b9a7ff;background:rgba(139,108,255,.10);border-radius:14px}
 .sort-drag{position:fixed!important;z-index:70;pointer-events:none;box-shadow:0 14px 34px rgba(80,60,170,.35)!important;opacity:.96;cursor:grabbing}
 </style>
@@ -165,9 +169,9 @@ details[open]>summary .arr{transform:rotate(180deg)}
     <section class="flex flex-col gap-3 lg:h-full lg:min-h-0">
       <div class="glass p-3 space-y-3 shrink-0">
         <div class="flex items-center justify-between">
-          <h2 class="font-bold">規則總控</h2>
-          <button id="addRuleBtn" class="btn btn-sm btn-primary">＋ 新增規則</button>
+          <button type="button" id="ctrlToggle" class="font-bold text-left cursor-pointer" title="收合／展開規則總控">▾ 規則總控</button>
         </div>
+        <div id="ctrlBody" class="space-y-3">
         <div class="flex items-center gap-2 text-xs"><span class="lbl shrink-0">🔊 主音量</span><input type="range" id="masterVol" min="0" max="100" value="100" class="flex-1" aria-label="主音量"><b id="masterVolVal" class="w-10 text-right text-[#8b6cff]">100%</b></div>
         <div class="grid grid-cols-3 gap-2">
           <button id="enableAllBtn" class="btn btn-sm btn-ghost">全部啟用</button>
@@ -178,13 +182,23 @@ details[open]>summary .arr{transform:rotate(180deg)}
           <summary class="font-bold text-[#5b46b8] cursor-pointer">⚙ 效能與延遲 <span id="perfLive" class="lbl text-[10px]"></span></summary>
           <div id="perfWarn" class="hidden text-[11px] font-bold text-[#d97706] pt-2 leading-snug"></div>
           <div class="space-y-2 pt-2">
+            <div id="perfCapLine" class="lbl text-[11px] leading-snug"></div>
+            <button type="button" id="rateOverviewBtn" class="btn btn-sm btn-ghost w-full">各項判斷頻率總覽／一次調整</button>
             <div class="flex items-center justify-between gap-2"><span class="lbl" title="只影響畫面預覽，不影響偵測">預覽畫面</span><select id="perfPreview" class="field !py-0.5"><option value="0">關閉</option><option value="5">5 fps</option><option value="15">15 fps</option><option value="30">30 fps</option><option value="60">不限制</option></select></div>
-            <div class="flex items-center justify-between gap-2"><span class="lbl" title="每秒最多比對幾次（fps＝每秒幾張畫面）；越高越即時、越吃效能">判斷頻率</span><select id="perfDetect" class="field !py-0.5"><option value="5">5 fps</option><option value="10">10 fps</option><option value="20">20 fps</option><option value="frame">最高 60 fps</option></select></div>
+            <div class="flex items-center justify-between gap-2"><span class="lbl" title="只管「跟隨預設」的項目；每條自己選了別的頻率，就照它自己的（越高越即時、越吃效能）">預設判斷頻率</span><select id="perfDetect" class="field !py-0.5"><option value="5">5 fps</option><option value="10">10 fps</option><option value="20">20 fps</option><option value="frame">最高 60 fps</option></select></div>
             <label class="flex items-center justify-between gap-2" title="遊戲畫面沒更新時，不重複做同一張畫面的比對（遊戲降 FPS 時更省）"><span class="lbl">跟著遊戲畫面更新</span><input type="checkbox" id="perfSync" class="sw"></label>
           </div>
         </details>
+        </div>
       </div>
+      <div class="soft p-2 flex flex-col gap-2 lg:flex-1 lg:min-h-0">
+        <div class="flex flex-wrap items-center gap-2 px-1 shrink-0">
+          <b class="font-bold text-sm">規則卡</b><span id="ruleCount" class="lbl text-xs"></span>
+          <button id="addRuleBtn" class="btn btn-sm btn-primary">＋ 新增規則</button>
+          <span class="ml-auto flex items-center gap-1.5"><span class="lbl text-xs">顯示</span><span class="grid grid-cols-3 gap-1"><button type="button" data-rv="compact" class="btn btn-sm btn-ghost" title="每張只剩一行">精簡</button><button type="button" data-rv="normal" class="btn btn-sm btn-ghost" title="進階設定收起">標準</button><button type="button" data-rv="full" class="btn btn-sm btn-ghost" title="進階設定全部展開">完整</button></span></span>
+        </div>
       <div id="scrollArea" class="space-y-3 p-1 pr-2 pb-3 lg:pb-24 lg:flex-1 lg:min-h-0 lg:overflow-y-auto soft-scroll"><div id="rulesContainer" class="space-y-3"></div></div>
+          </div>
     </section>
   </div>
 </div>
@@ -531,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const cropModal=$('cropModal'),modalCanvas=$('modalCanvas'),modalCtx=modalCanvas.getContext('2d');
   const modalPreviewCanvas=$('modalPreviewCanvas');
   const colorModal=$('colorModal'),modalColorPicker=$('modalColorPicker'),modalColorPreview=$('modalColorPreview');
-  const APP_VERSION='2.2.0 BETA',SCHEMA=3;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
+  const APP_VERSION='2.3.2 BETA',SCHEMA=3;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
   $('verChip').title=`程式版本 ${APP_VERSION} · 設定檔格式 v${SCHEMA}`;$('verChip').textContent='v'+APP_VERSION;
   let audioCtx=null,isCapturing=false,isDragging=false,dragStart={x:0,y:0},snapshotImgData=null,tempRoi={x:.2,y:.85,w:.15,h:.08},tempSens=45;
   let modalMode='rule',modalBar=null,tempColorMin=40;
@@ -775,12 +789,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }).join('')||`<span class="lbl text-[10px]">尚無其他規則</span>`;
 
       const card=document.createElement('div');card.dataset.card=id;card.style.setProperty('--rc',c);
-      card.className='glass p-4 space-y-3 transition-shadow'+(r.enabled?'':' opacity-60');
+      card.className='glass p-4 space-y-3 transition-shadow'+(r.enabled?'':' opacity-60');if(r._fold)card.dataset.fold='1';
       card.innerHTML=`
         <div class="flex items-center gap-2">
           <button type="button" class="card-grip" title="按住上下拖動，調整規則順序" aria-label="拖動排序">⠿</button>
           <button data-id="${id}" class="open-color-modal-btn dot" style="background:${c}" title="變更框線顏色" aria-label="變更框線顏色"></button>
           <input type="text" value="${esc(r.name)}" data-id="${id}" class="rule-name-input field flex-1 min-w-0 font-bold">
+          <button type="button" data-id="${id}" class="card-fold icon-btn" title="收合／展開這張卡片" aria-label="收合展開">${r._fold?'▸':'▾'}</button>
           <button data-id="${id}" id="mute_${id}" class="mute-toggle-btn icon-btn" title="切換靜音">${r.isMuted?'🔕':'🔔'}</button>
           <input type="checkbox" class="sw rule-enable-toggle" data-id="${id}" ${r.enabled?'checked':''} aria-label="啟用判斷" title="啟用/停用判斷">
           ${rules.length>1?`<button data-id="${id}" class="delete-rule-btn icon-btn text-[#d9467e]" title="刪除規則" aria-label="刪除規則">✕</button>`:''}
@@ -889,7 +904,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   rulesContainer.addEventListener('click',e=>{
     const t=e.target,r=ruleOf(t);if(!r)return;
-    if(t.closest('.open-color-modal-btn')){colorSelectingRuleId=r.id;updateModalColorUI(r.color||'#f59e0b');colorModal.classList.remove('hidden');}
+    if(t.closest('.card-fold')){const fb=t.closest('.card-fold'),cd=fb.closest('[data-card]');r._fold=!r._fold;if(r._fold)cd.dataset.fold='1';else delete cd.dataset.fold;fb.textContent=r._fold?'▸':'▾';}
+    else if(t.closest('.open-color-modal-btn')){colorSelectingRuleId=r.id;updateModalColorUI(r.color||'#f59e0b');colorModal.classList.remove('hidden');}
     else if(t.closest('.open-crop-modal-btn')){
       if(!isCapturing){ui.alert('請先點擊頂部的「開啟畫面分享」並選擇遊戲視窗！');return;}
       modalMode='rule';modalBar=null;setModalMode();activeRuleId=r.id;markActive();tempRoi={...r.roi};tempSens=r.inkSens;$('sensRange').value=tempSens;$('sensVal').textContent=tempSens;
@@ -950,6 +966,81 @@ document.addEventListener('DOMContentLoaded', () => {
     rules.push(makeRule({id,name:`規則 ${id}`,color:defaultColors[(id-1)%defaultColors.length]}));activeRuleId=id;renderRulesUI();
     rulesContainer.lastElementChild?.scrollIntoView({behavior:'smooth',block:'nearest'});
   };
+
+  /* ---------- 規則總控收合（記在這台瀏覽器） ---------- */
+  {const tg=$('ctrlToggle'),bd=$('ctrlBody');let fold=false;try{fold=localStorage.getItem('rf4ctrlfold')==='1';}catch(e){}
+   const ap=()=>{bd.classList.toggle('hidden',fold);tg.textContent=(fold?'▸ ':'▾ ')+'規則總控';};
+   tg.onclick=()=>{fold=!fold;try{localStorage.setItem('rf4ctrlfold',fold?'1':'0');}catch(e){}ap();};ap();}
+
+  /* ---------- 規則卡顯示模式（精簡／標準／完整）---------- */
+  let ruleView='normal';try{ruleView=localStorage.getItem('rf4ruleview')||'normal';}catch(e){}
+  function applyRuleFlags(){rules.forEach(r=>{r._fold=ruleView==='compact';if(ruleView==='full')r._open=true;else r._open=false;});}
+  function setRuleView(mode){
+    ruleView=mode;try{localStorage.setItem('rf4ruleview',mode);}catch(e){}
+    applyRuleFlags();renderRulesUI();
+    document.querySelectorAll('[data-rv]').forEach(b=>{const on=b.dataset.rv===mode;b.classList.toggle('btn-primary',on);b.classList.toggle('btn-ghost',!on);});
+  }
+  document.querySelectorAll('[data-rv]').forEach(b=>b.onclick=()=>setRuleView(b.dataset.rv));
+  setTimeout(()=>setRuleView(ruleView),0);
+
+  /* ---------- 擷取來源說明＋各項判斷頻率總覽 ---------- */
+  function capSource(){
+    const its=[...rules.filter(r=>r.enabled),...bars.filter(b=>b.enabled)];
+    if(!its.length)return{fps:hzNum(perf.detectHz),name:null};
+    let best=its[0],bh=hzNum(rateOf(best));its.forEach(x=>{const h=hzNum(rateOf(x));if(h>bh){best=x;bh=h;}});
+    return{fps:bh,name:(best.rate&&best.rate!=='global')?best.name:null};
+  }
+  const capText=()=>{const c=capSource();return `擷取畫面：${c.fps} fps（${c.name?`由「${c.name}」決定`:'跟隨預設判斷頻率'}）`;};
+  function capLineUpdate(){const el=$('perfCapLine');if(!el)return;const t=capText();if(el._t!==t){el._t=t;el.textContent=t;}}
+  const RATE_LBL={global:'跟隨預設',5:'5 fps',10:'10 fps',20:'20 fps',frame:'最高 60 fps'};
+  function openRateOverview(){
+    if(document.getElementById('rateOv'))return;
+    const ov=document.createElement('div');ov.id='rateOv';ov.style.cssText='position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(40,25,80,.55);padding:16px';
+    const box=document.createElement('div');box.style.cssText='max-width:560px;width:100%;max-height:86vh;overflow:auto;padding:22px;border-radius:20px;background:#fff;border:2px solid #cdbcf5;box-shadow:0 24px 60px rgba(60,35,120,.45);color:#3b2f6b';
+    ov.appendChild(box);document.body.appendChild(ov);
+    let bulkRate='20',scope='cur';
+    const opt=(vals,sel)=>vals.map(v=>`<option value="${v}"${String(v)===String(sel)?' selected':''}>${RATE_LBL[v]}</option>`).join('');
+    const groupsNow=()=>{saveCurrentGroup();return groups;};
+    const render=()=>{
+      const gs=groupsNow();let rows='';
+      gs.forEach(g=>{
+        const isCur=g.id===activeGroupId;
+        rows+=`<div style="font-weight:800;margin:12px 0 4px;font-size:13px">${esc(g.name)}${isCur?'（目前群組）':'（目前沒在運作）'}</div>`;
+        [['r','規則',g.rules],['b','狀態條',g.bars]].forEach(([k,lab,arr])=>arr.forEach((x,i)=>{
+          const v=x.rate&&RATE_LBL[x.rate]?x.rate:'global';
+          rows+=`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v!=='global'?'<b style="color:#8b6cff">● </b>':''}<span style="opacity:.55;font-size:11px">${lab}　</span>${esc(x.name)}${x.enabled===false?' <span style="opacity:.5">（停用）</span>':''}</span><select class="field !py-0.5 rv-sel" data-g="${g.id}" data-k="${k}" data-i="${i}">${opt(['global',5,10,20,'frame'],v)}</select></div>`;
+        }));
+      });
+      box.innerHTML=`<div style="font-weight:800;font-size:16px;margin-bottom:4px">各項判斷頻率總覽</div>
+        <div style="font-size:12px;opacity:.75;margin-bottom:10px;line-height:1.5">${capText()}　·　預設判斷頻率：${RATE_LBL[perf.detectHz==='frame'?'frame':perf.detectHz]}<br>● 代表這一項有自己的頻率，不跟隨預設。</div>
+        <div class="soft" style="padding:10px;margin-bottom:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700">一次設定</span>
+          <select id="rvBulkRate" class="field !py-0.5">${opt([5,10,20,'frame'],bulkRate)}</select>
+          <select id="rvScope" class="field !py-0.5"><option value="cur"${scope==='cur'?' selected':''}>目前群組</option><option value="all"${scope==='all'?' selected':''}>所有群組</option></select>
+          <button type="button" id="rvBulkSet" class="btn btn-sm btn-primary">全部設為這個頻率</button>
+          <button type="button" id="rvBulkGlobal" class="btn btn-sm btn-ghost">全部恢復跟隨預設</button></div>
+        ${rows}<div style="display:flex;justify-content:flex-end;margin-top:14px"><button type="button" id="rvClose" class="btn btn-primary">完成</button></div>`;
+    };
+    const refresh=()=>{renderAll();render();};
+    const targets=()=>groupsNow().filter(g=>scope==='all'||g.id===activeGroupId);
+    const setAll=v=>{targets().forEach(g=>{g.rules.forEach(x=>x.rate=v);g.bars.forEach(x=>x.rate=v);});refresh();};
+    box.addEventListener('change',e=>{
+      const t=e.target;
+      if(t.id==='rvBulkRate'){bulkRate=t.value;return;}
+      if(t.id==='rvScope'){scope=t.value;return;}
+      if(t.classList.contains('rv-sel')){const g=groupsNow().find(x=>x.id===+t.dataset.g);if(!g)return;const arr=t.dataset.k==='r'?g.rules:g.bars,x=arr[+t.dataset.i];if(x){x.rate=t.value;refresh();}}
+    });
+    box.addEventListener('click',e=>{
+      if(e.target.id==='rvBulkSet')setAll(bulkRate);
+      else if(e.target.id==='rvBulkGlobal')setAll('global');
+      else if(e.target.id==='rvClose')close();
+    });
+    const kd=e=>{if(e.key==='Escape'){e.stopPropagation();close();}};
+    const close=()=>{document.removeEventListener('keydown',kd,true);ov.remove();};
+    document.addEventListener('keydown',kd,true);
+    ov.addEventListener('mousedown',e=>{if(e.target===ov)close();});
+    render();
+  }
+  $('rateOverviewBtn').onclick=openRateOverview;
 
   /* ---------- 顏色 Modal ---------- */
   defaultColors.forEach(c=>{const b=document.createElement('button');b.className='w-7 h-7 rounded-full border-2 border-white shadow hover:scale-110 transition cursor-pointer';b.style.backgroundColor=c;b.setAttribute('aria-label',c);b.onclick=()=>updateModalColorUI(c);$('colorPresetsContainer').appendChild(b);});
@@ -1358,7 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
     finally{busy=false;presetUI();}
     e.target.value='';
   });
-  setInterval(()=>{if(!ready||busy)return;const d=isDirty();if(d!==lastDirty)presetUI();},1000);
+  setInterval(()=>{try{capLineUpdate();const rc=$('ruleCount');if(rc){const t=rules.length+' 張';if(rc.textContent!==t)rc.textContent=t;}}catch(e){}if(!ready||busy)return;const d=isDirty();if(d!==lastDirty)presetUI();},1000);
   setTimeout(async()=>{   // 啟動：記下「空白」狀態；讀回已保存的自訂。不自動套用任何預設
     try{blankBlob=await buildPackBlob();blankSig=sigNow();cur.baseSig=blankSig;}catch(e){}
     const v=await idb('readonly',st=>st.get('customs'));if(Array.isArray(v))customs=v.filter(c=>c&&c.blob&&c.name);
@@ -1444,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
     c.textContent=t;c.className='chip '+cls;document.title=ico+BASE_TITLE;
     {if(updateLiveChip._t==null){updateLiveChip._t=now;updateLiveChip._c=vfCount;}const dt=now-updateLiveChip._t;if(dt>=400){const f=Math.round((vfCount-(updateLiveChip._c||0))*1000/dt);updateLiveChip._t=now;updateLiveChip._c=vfCount;updateLiveChip._f=f;}
      const txt=isCapturing?`偵測 ${tickMs.toFixed(0)}ms · 畫面 ${updateLiveChip._f==null?'--':updateLiveChip._f}fps${anyFast()?' · ⚡':''}`:'',rp=$('railPerf'),pl=$('perfLive');
-     resCheck();applyFps(now);const wn=fpsWarning(now),pw=$('perfWarn');
+     resCheck();capLineUpdate();applyFps(now);const wn=fpsWarning(now),pw=$('perfWarn');
      if(rp){rp.textContent=txt+(wn?' · ⚠':'');rp.title=wn;rp.style.color=(tickMs>40||wn)?'#d97706':'';}if(pl)pl.textContent=txt+(wn?' · ⚠':'');
      if(pw){pw.textContent=wn;pw.classList.toggle('hidden',!wn);}}
   }
@@ -2006,7 +2097,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function clearBarRuntime(b){if(b._audio){try{b._audio.pause();}catch(e){}}b._active=false;b._lastAlert=0;b._hist=[];b._hues=[];}
   function clearGroupRuntime(g){g.rules.forEach(clearRuleRuntime);g.bars.forEach(clearBarRuntime);}
   function stopAllRuntime(){groups.forEach(clearGroupRuntime);}
-  function loadGroup(g){railOrder=normRail(g.railOrder);rules=g.rules;bars=g.bars;activeRuleId=rules.some(r=>r.id===g.activeRuleId)?g.activeRuleId:(rules[0]?rules[0].id:1);}
+  function loadGroup(g){railOrder=normRail(g.railOrder);rules=g.rules;bars=g.bars;try{applyRuleFlags();}catch(e){}activeRuleId=rules.some(r=>r.id===g.activeRuleId)?g.activeRuleId:(rules[0]?rules[0].id:1);}
   function renderAll(){renderGroupBar();renderBarsUI();renderRulesUI();}
   // 體力／飽食：只有框選位置各群組共用；開關、方向、門檻、間隔、音效、音量各群組獨立
   const BAR_SHARED=['roi','colorMin','roiSet'];
