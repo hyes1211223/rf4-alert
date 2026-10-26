@@ -28,6 +28,7 @@ canvas{touch-action:none}
 .soft-scroll::-webkit-scrollbar-thumb{background:linear-gradient(#b7a6ff,#f08bc4);border-radius:99px;border:2px solid rgba(255,255,255,.7)}
 .no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
 .glass{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:2px solid rgba(255,255,255,.78);box-shadow:0 0 0 1px var(--line),0 10px 28px rgba(110,90,200,.18);border-radius:22px}
+#barModal .glass,#colorModal .glass,#cropModal .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 .soft{background:rgba(255,255,255,.62);border:1.5px solid var(--lav2);border-radius:16px}
 .frame{border:5px solid var(--lav);border-radius:22px;background:#000;overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.75),0 12px 30px rgba(90,70,180,.35)}
 button:disabled,.btn:disabled,select:disabled,input:disabled{cursor:not-allowed!important}
@@ -123,7 +124,6 @@ details[open]>summary .arr{transform:rotate(180deg)}
     <span class="lbl font-bold">預設檔</span>
     <select id="presetSel" class="field !py-0.5" style="min-width:12rem"></select>
     <button id="presetSave" class="btn btn-primary !py-1 !px-3" disabled title="把目前的設定存成一份自訂（存在這台瀏覽器）">儲存</button>
-    <button id="presetCopy" class="btn btn-ghost !py-1 !px-3" title="把目前的設定（含還沒儲存的修改）複製成一份新的自訂">複製</button>
     <button id="presetAdd" class="btn btn-ghost !py-1 !px-3" title="建立一份空白的自訂">新增</button>
     <button id="presetDel" class="btn btn-ghost !py-1 !px-3" disabled title="移除目前這份自訂">移除</button>
     <button id="presetSaveAs" class="btn btn-ghost !py-1 !px-3" title="把目前的設定（含還沒儲存的修改）另存成新的自訂，可以自己取名">另存</button>
@@ -205,7 +205,7 @@ details[open]>summary .arr{transform:rotate(180deg)}
 
 <div id="undoToast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-6 z-50 glass px-4 py-2 flex items-center gap-3 text-sm"><span id="undoMsg" class="font-bold text-[#3b2f6e]"></span><button id="undoBtn" class="btn btn-sm btn-primary">↩ 復原</button></div>
 <!-- 體力／飽食 設定視窗 -->
-<div id="barModal" class="hidden fixed inset-0 bg-[#3b2f6e]/40 z-40 flex items-center justify-center p-4 backdrop-blur-sm">
+<div id="barModal" class="hidden fixed inset-0 bg-[#3b2f6e]/40 z-40 flex items-center justify-center p-4">
   <div class="glass !bg-white/95 p-5 max-w-md w-full max-h-[92vh] overflow-y-auto soft-scroll space-y-3">
     <div class="flex items-center justify-between gap-2"><h3 class="font-bold min-w-0 truncate" id="barModalTitle">設定</h3><button id="closeBarModal" class="icon-btn" aria-label="關閉">✕</button></div>
     <div id="barsContainer" class="space-y-3"></div>
@@ -213,7 +213,7 @@ details[open]>summary .arr{transform:rotate(180deg)}
 </div>
 
 <!-- 顏色選取視窗 -->
-<div id="colorModal" class="hidden fixed inset-0 bg-[#3b2f6e]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+<div id="colorModal" class="hidden fixed inset-0 bg-[#3b2f6e]/40 z-50 flex items-center justify-center p-4">
   <div class="glass !bg-white/90 p-5 max-w-xs w-full space-y-4">
     <div class="flex justify-between items-center"><h3 class="font-bold">監控框顏色</h3><button id="closeColorModalX" class="icon-btn" aria-label="關閉">✕</button></div>
     <div class="flex items-center gap-3">
@@ -226,7 +226,7 @@ details[open]>summary .arr{transform:rotate(180deg)}
 </div>
 
 <!-- ROI 框選與摳字視窗 -->
-<div id="cropModal" class="hidden fixed inset-0 bg-[#3b2f6e]/55 z-50 flex flex-col p-3 md:p-5 gap-3 backdrop-blur-sm">
+<div id="cropModal" class="hidden fixed inset-0 bg-[#3b2f6e]/55 z-50 flex flex-col p-3 md:p-5 gap-3">
   <div class="glass !bg-white/85 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
     <div><h2 class="font-bold">調整監控範圍與摳字</h2>
       <p id="zoomHint" class="text-[11px] font-bold text-[#8b6cff]"></p>
@@ -405,12 +405,18 @@ details[open]>summary .arr{transform:rotate(180deg)}
     return parts[parts.length - 1].trim().toLowerCase();
   }
 
+  const cursorCache = new WeakMap();   // 效能：同一元素 20 秒內不重複查詢（查詢會讓整頁重算樣式）
   function readCursor(el) {
+    if (el.style && el.style.cursor) return keywordOf(el.style.cursor);   // 行內樣式直接讀，不必重算
+    const now = performance.now(), hit = cursorCache.get(el), dis = isDisabled(el);
+    if (hit && hit.d === dis && now - hit.t < 20000) return hit.k;
     let c = 'auto';
     if (hider) hider.set(false);
     try { c = getComputedStyle(el).cursor; } catch (e) { /* ignore */ }
     if (hider) hider.set(settings.enabled);
-    return keywordOf(c);
+    const k = keywordOf(c);
+    cursorCache.set(el, { k, t: now, d: dis });
+    return k;
   }
 
   function isDisabled(el) {
@@ -545,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const cropModal=$('cropModal'),modalCanvas=$('modalCanvas'),modalCtx=modalCanvas.getContext('2d');
   const modalPreviewCanvas=$('modalPreviewCanvas');
   const colorModal=$('colorModal'),modalColorPicker=$('modalColorPicker'),modalColorPreview=$('modalColorPreview');
-  const APP_VERSION='2.3.2 BETA',SCHEMA=3;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
+  const APP_VERSION='2.3.5 BETA',SCHEMA=3;   // SCHEMA：設定檔格式版本，之後改格式時用來做相容轉換
   $('verChip').title=`程式版本 ${APP_VERSION} · 設定檔格式 v${SCHEMA}`;$('verChip').textContent='v'+APP_VERSION;
   let audioCtx=null,isCapturing=false,isDragging=false,dragStart={x:0,y:0},snapshotImgData=null,tempRoi={x:.2,y:.85,w:.15,h:.08},tempSens=45;
   let modalMode='rule',modalBar=null,tempColorMin=40;
@@ -579,6 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lastMatchTime:0,
     neverMute:false,
     isMuted:false,
+    userMuted:false,   // 手動靜音（會存進設定、切群組不會被清掉）；isMuted 則是目前實際是否靜音（含發完次數後的自動靜音）
     resetsTargets:[],
     resetBySources:[],
     persistTime:0,
@@ -746,7 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const tgt=rules.find(r=>r.id===tgtId);
       if(tgt){
         stopSound(tgt,'reset');
-        tgt.isMuted=false;
+        tgt.isMuted=!!tgt.userMuted;
         tgt.currentAlerts=0;
         tgt.isCoolingDown=false;
         tgt.isClearLocked=false;
@@ -914,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     else if(t.closest('.test-sound-btn')){playSound(r);}
     else if(t.closest('.unlock-btn')){r.isClearLocked=false;r.clearStartTime=0;refreshStatus(r);}
-    else if(t.closest('.mute-toggle-btn')){r.isMuted=!r.isMuted;if(!r.isMuted)r.currentAlerts=0;refreshStatus(r);}
+    else if(t.closest('.mute-toggle-btn')){const nm=!r.isMuted;r.isMuted=nm;r.userMuted=nm;if(!nm)r.currentAlerts=0;refreshStatus(r);}
     else if(t.closest('.delete-rule-btn')){
       rules=rules.filter(x=>x.id!==r.id);
       rules.forEach(x=>{
@@ -960,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('enableAllBtn').onclick=()=>{rules.forEach(r=>r.enabled=true);renderRulesUI();};
   $('disableAllBtn').onclick=()=>{rules.forEach(r=>r.enabled=false);renderRulesUI();};
   $('unmuteAllBtn').title='解除所有規則的靜音與鎖定';
-  $('unmuteAllBtn').onclick=()=>{rules.forEach(r=>{r.isMuted=false;r.currentAlerts=0;r.isClearLocked=false;r.clearStartTime=0;refreshStatus(r);});};
+  $('unmuteAllBtn').onclick=()=>{rules.forEach(r=>{r.isMuted=false;r.userMuted=false;r.currentAlerts=0;r.isClearLocked=false;r.clearStartTime=0;refreshStatus(r);});};
   $('addRuleBtn').onclick=()=>{
     const id=rules.length?Math.max(...rules.map(x=>x.id))+1:1;
     rules.push(makeRule({id,name:`規則 ${id}`,color:defaultColors[(id-1)%defaultColors.length]}));activeRuleId=id;renderRulesUI();
@@ -1187,7 +1194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   modalCanvas.addEventListener('pointerup',endDrag);modalCanvas.addEventListener('pointercancel',endDrag);
   $('cancelCropBtn').onclick=()=>cropModal.classList.add('hidden');
   $('resetCropBtn').onclick=()=>{tempRoi={x:0,y:0,w:0,h:0};view={x:0,y:0,w:1,h:1};pushHist();renderModalCanvas();};
-  function resetRuleState(r){r.currentAlerts=0;r.lastMatchTime=0;r.isMuted=false;r.isClearLocked=false;r.holdStartTime=0;r._confirmed=false;r._missAt=0;r.clearStartTime=0;r._hist=[];r._tc={};r.inkSens=tempSens;}
+  function resetRuleState(r){r.currentAlerts=0;r.lastMatchTime=0;r.isMuted=!!r.userMuted;r.isClearLocked=false;r.holdStartTime=0;r._confirmed=false;r._missAt=0;r.clearStartTime=0;r._hist=[];r._tc={};r.inkSens=tempSens;}
   $('saveRoiOnlyBtn').onclick=()=>{tempRoi=snapRoi(tempRoi);const r=rules.find(x=>x.id===activeRuleId);if(r){r.roi={...tempRoi};resetRuleState(r);}cropModal.classList.add('hidden');renderRulesUI();};
   $('saveCropBtn').onclick=()=>{
     if(modalMode==='bar'){saveBarRoi();return;}
@@ -1246,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const url=URL.createObjectURL(await buildPackBlob()),a=document.createElement('a');
     a.href=url;a.download=`RF4_${packName.replace(/[\\/:*?"<>|\s]+/g,'_')}_r${packRev}_v${APP_VERSION.replace(/\s+/g,'-')}_${new Date().toISOString().slice(0,10)}.zip`;a.click();URL.revokeObjectURL(url);
   };
-  const RULE_KEYS=['id','name','roi','threshold','soundType','customAudioFileName','volume','color','enabled','cooldown','maxAlerts','neverMute','resetsTargets','resetBySources','persistTime','lockEnabled','clearEnabled','clearTime','inkSens','rate','stopMode','stopFadeSec','stopGone','stopReset','stopRod'];
+  const RULE_KEYS=['userMuted','id','name','roi','threshold','soundType','customAudioFileName','volume','color','enabled','cooldown','maxAlerts','neverMute','resetsTargets','resetBySources','persistTime','lockEnabled','clearEnabled','clearTime','inkSens','rate','stopMode','stopFadeSec','stopGone','stopReset','stopRod'];
   let packName='我的設定',packRev=0,legacyRod=null;
   const ruleToJson=r=>{const o={};RULE_KEYS.forEach(k=>o[k]=r[k]);o.targetImageBase64=r.targetImageData?imgToCanvas(r.targetImageData).toDataURL():null;return o;};
   const barToJson=b=>{const o={};BAR_KEYS.forEach(k=>o[k]=b[k]);return o;};
@@ -1263,9 +1270,10 @@ document.addEventListener('DOMContentLoaded', () => {
   async function ruleFromJson(z,it,audioPath){
     const url=it.customAudioFileName?await readAudio(z,audioPath(it)):null;
     const{targetImageBase64,...rest0}=it,rest=migrateRule(rest0);
-    return makeRule({...rest,customAudioUrl:url,
+    const rr=makeRule({...rest,customAudioUrl:url,
       targetImageData:targetImageBase64?await b64ToImg(targetImageBase64):defaultUncastImageData,
       neverMute:it.neverMute||false,resetsTargets:it.resetsTargets||[],resetBySources:it.resetBySources||[],inkSens:it.inkSens||45});
+    rr.isMuted=!!rr.userMuted;return rr;
   }
   async function barsFromJson(z,arr,audioPath){
     const out=[];
@@ -1375,9 +1383,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const c={id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,baseId,blob:await buildPackBlob(),at:Date.now()};
     customs.push(c);await saveCustoms();cur={type:'custom',id:c.id,name:c.name,baseId:c.baseId,baseSig:sigNow()};draftName=null;flash(msg);presetUI();return true;
   }
-  async function copyCurrent(){
-    try{await makeCustom(copyName(cur.type==='none'?'自訂':cur.name),'已複製 ✓');}catch(err){ui.alert('複製失敗：'+err.message);}
-  }
   async function loadTarget(val){
     busy=true;
     try{
@@ -1439,7 +1444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     el.classList.toggle('hidden',!msg);
   }
   $('presetSel').onchange=e=>switchTo(e.target.value);
-  $('presetSave').onclick=saveCurrent;$('presetCopy').onclick=copyCurrent;$('presetAdd').onclick=addBlank;$('presetDel').onclick=removeCustom;$('presetSaveAs').onclick=saveAs;$('presetRename').onclick=renameCustom;
+  $('presetSave').onclick=saveCurrent;$('presetAdd').onclick=addBlank;$('presetDel').onclick=removeCustom;$('presetSaveAs').onclick=saveAs;$('presetRename').onclick=renameCustom;
   $('importZipInput').addEventListener('change',async e=>{   // 匯入：先處理沒存的修改
     const file=e.target.files[0];if(!file)return;
     if(!await ensureSaved()){e.target.value='';return;}
@@ -1652,6 +1657,7 @@ document.addEventListener('DOMContentLoaded', () => {
     onlyFast=true;try{const now=Date.now();tickBars(now);runRules(now);}finally{onlyFast=false;}
   }
   let lastRender=0,previewOffDrawn=false;
+  const modalBusy=()=>!$('barModal').classList.contains('hidden')||!$('colorModal').classList.contains('hidden')||!cropModal.classList.contains('hidden');
   function renderLoop(ts){
     if(!isCapturing)return;
     if(perf.previewFps===0){   // 預覽關閉：偵測照常，只是不畫畫面
@@ -1659,7 +1665,7 @@ document.addEventListener('DOMContentLoaded', () => {
       requestAnimationFrame(renderLoop);return;
     }
     previewOffDrawn=false;
-    if(ts-lastRender<1000/perf.previewFps-4){requestAnimationFrame(renderLoop);return;}
+    if(ts-lastRender<1000/(modalBusy()?Math.min(perf.previewFps,10):perf.previewFps)-4){requestAnimationFrame(renderLoop);return;}
     lastRender=ts;
     if(video.readyState>=2){
       ctx.drawImage(video,0,0,mainCanvas.width,mainCanvas.height);drawBars();
@@ -2092,7 +2098,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveCurrentGroup(){const g=curGroup();g.rules=rules;g.bars=bars;g.activeRuleId=activeRuleId;g.railOrder=[...railOrder];}
   function clearRuleRuntime(r){
     clearTimeout(r._cooldownTimer);r._cooldownTimer=null;if(r._audio){try{r._audio.pause();}catch(e){}}
-    Object.assign(r,{isCoolingDown:false,isMuted:false,currentAlerts:0,lastMatchTime:0,holdStartTime:0,isClearLocked:false,clearStartTime:0,_confirmed:false,_missAt:0,_lastReset:0,_hist:[]});
+    Object.assign(r,{isCoolingDown:false,isMuted:!!r.userMuted,currentAlerts:0,lastMatchTime:0,holdStartTime:0,isClearLocked:false,clearStartTime:0,_confirmed:false,_missAt:0,_lastReset:0,_hist:[]});
   }
   function clearBarRuntime(b){if(b._audio){try{b._audio.pause();}catch(e){}}b._active=false;b._lastAlert=0;b._hist=[];b._hues=[];}
   function clearGroupRuntime(g){g.rules.forEach(clearRuleRuntime);g.bars.forEach(clearBarRuntime);}
@@ -2279,7 +2285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const row=e.target.closest('.sp-row');if(!row)return;const [kind,key]=row.dataset.sp.split(':');
     if(e.target.closest('.sp-bell')){
       if(kind==='bar'){const b=bars.find(x=>x.key===key);if(b){b.muted=!b.muted;updateStatusPanel();}}
-      else if(kind==='rule'){const r=rules.find(x=>x.id===+key);if(r){r.isMuted=!r.isMuted;if(!r.isMuted)r.currentAlerts=0;refreshStatus(r);updateStatusPanel();}}
+      else if(kind==='rule'){const r=rules.find(x=>x.id===+key);if(r){const nm=!r.isMuted;r.isMuted=nm;r.userMuted=nm;if(!nm)r.currentAlerts=0;refreshStatus(r);updateStatusPanel();}}
     }else if(e.target.closest('.sp-name')){
       if(kind==='bar')openBarSettings(key);
       else if(kind==='rule'){activeRuleId=+key;markActive();const c=rulesContainer.querySelector(`[data-card="${key}"]`);if(c)c.scrollIntoView({behavior:'smooth',block:'nearest'});}
